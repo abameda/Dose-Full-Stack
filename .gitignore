@@ -1,0 +1,18 @@
+# Original Word export of the master plan; docs/master-plan.md is the source of truth
+Master PLan.docx
+
+# Graphify: generated per machine, and its hooks hold machine-specific paths
+graphify-out/
+.codex/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Dependencies, builds and secrets (for when code arrives)
+node_modules/
+dist/
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars
