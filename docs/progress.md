@@ -1,0 +1,8 @@
+# Progress
+
+## 2026-10-20
+- Repository set up and connected to github.com/abameda/Dose-Full-Stack (branch `main`).
+- Master plan moved to `docs/master-plan.md`; `CLAUDE.md`, `docs/decisions/` and this log created.
+- `docs/milestones.md` (M1 to launch) and the Milestone 1 plan (`docs/plans/2026-10-20-milestone-1-foundation-and-proof.md`) drafted.
+- **Waiting on the owner:** approval of the milestone map, the M1 plan and its interpretations table (O1); accounts (O2); product copy and photos (O3).
+- No application code written; no cloud accounts created; doseeg.com, Paymob and Bosta untouched.
