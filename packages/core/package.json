@@ -16,7 +16,9 @@
     "./phone": "./src/phone.ts",
     "./address": "./src/address.ts",
     "./checkout": "./src/checkout.ts",
-    "./order-actions": "./src/order-actions.ts"
+    "./order-actions": "./src/order-actions.ts",
+    "./webhooks": "./src/webhooks.ts",
+    "./outbox": "./src/outbox.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

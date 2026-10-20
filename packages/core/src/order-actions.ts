@@ -122,7 +122,30 @@ async function settleReservations(tx: Tx, orderId: string, status: 'consumed' | 
   return rows.sort((a, b) => (a.variant_id < b.variant_id ? -1 : a.variant_id > b.variant_id ? 1 : 0));
 }
 
-async function confirmInTx(tx: Tx, a: ConfirmCommand, note: string | undefined): Promise<ActionOutcome> {
+/** The confirm's note, cleaned, or `null` when the command is invalid. */
+function confirmNote(a: ConfirmCommand): { note: string | undefined } | null {
+  const note = cleanNote(a.note);
+  if (note === null || !isVersion(a.expectedVersion) || !(CONFIRM_METHODS as readonly string[]).includes(a.method)) return null;
+  return note;
+}
+
+/** The cancel's note, cleaned, or `null` when the command is invalid. The reason `'other'` needs a note. */
+function cancelNote(a: CancelCommand): { note: string | undefined } | null {
+  const note = cleanNote(a.note);
+  if (note === null || !isVersion(a.expectedVersion) || !(CANCEL_REASONS as readonly string[]).includes(a.reason)) return null;
+  if (a.reason === 'other' && note.note === undefined) return null;
+  return note;
+}
+
+/**
+ * `confirmOrder` on a transaction the caller owns, for a confirm that is part of a larger change
+ * (a provider event, say). Its changes commit or roll back with that transaction. Answers
+ * `conflict` (changing nothing) as `confirmOrder` does; the caller decides whether that is an error.
+ */
+export async function confirmOrderInTx(tx: Tx, a: ConfirmCommand): Promise<ActionOutcome> {
+  const checked = confirmNote(a);
+  if (checked === null) return INVALID;
+  const note = checked.note;
   const moved = await transition(tx, a.orderNumber, a.expectedVersion, CONFIRMABLE, 'confirmed');
   if ('ok' in moved) return moved;
 
@@ -142,7 +165,14 @@ async function confirmInTx(tx: Tx, a: ConfirmCommand, note: string | undefined):
   return { ok: true, version: moved.version };
 }
 
-async function cancelInTx(tx: Tx, a: CancelCommand, note: string | undefined): Promise<ActionOutcome> {
+/**
+ * `cancelOrder` on a transaction the caller owns; its changes commit or roll back with that
+ * transaction. Answers `conflict` (changing nothing) as `cancelOrder` does.
+ */
+export async function cancelOrderInTx(tx: Tx, a: CancelCommand): Promise<ActionOutcome> {
+  const checked = cancelNote(a);
+  if (checked === null) return INVALID;
+  const note = checked.note;
   const moved = await transition(tx, a.orderNumber, a.expectedVersion, CANCELLABLE, 'cancelled');
   if ('ok' in moved) return moved;
 
@@ -175,11 +205,9 @@ async function cancelInTx(tx: Tx, a: CancelCommand, note: string | undefined): P
  * no longer pending or no longer at that version.
  */
 export async function confirmOrder(db: Db, a: ConfirmCommand): Promise<ActionOutcome> {
-  const note = cleanNote(a.note);
-  if (note === null || !isVersion(a.expectedVersion) || !(CONFIRM_METHODS as readonly string[]).includes(a.method)) {
-    return INVALID;
-  }
-  return db.transaction((tx) => confirmInTx(tx, a, note.note));
+  // Checked here as well, so invalid input never opens a transaction.
+  if (confirmNote(a) === null) return INVALID;
+  return db.transaction((tx) => confirmOrderInTx(tx, a));
 }
 
 /**
@@ -188,12 +216,8 @@ export async function confirmOrder(db: Db, a: ConfirmCommand): Promise<ActionOut
  * (changing nothing) when the order is no longer pending or no longer at that version.
  */
 export async function cancelOrder(db: Db, a: CancelCommand): Promise<ActionOutcome> {
-  const note = cleanNote(a.note);
-  if (note === null || !isVersion(a.expectedVersion) || !(CANCEL_REASONS as readonly string[]).includes(a.reason)) {
-    return INVALID;
-  }
-  if (a.reason === 'other' && note.note === undefined) return INVALID;
-  return db.transaction((tx) => cancelInTx(tx, a, note.note));
+  if (cancelNote(a) === null) return INVALID;
+  return db.transaction((tx) => cancelOrderInTx(tx, a));
 }
 
 /**
@@ -218,11 +242,12 @@ export async function expireStaleOrders(db: Db, now: Date, limit: number = DEFAU
         [now],
       );
       if (stale === undefined) return null;
-      const outcome = await cancelInTx(
-        tx,
-        { orderNumber: stale.number, expectedVersion: stale.version, actor: EXPIRY_ACTOR, reason: 'confirmation_window_expired' },
-        undefined,
-      );
+      const outcome = await cancelOrderInTx(tx, {
+        orderNumber: stale.number,
+        expectedVersion: stale.version,
+        actor: EXPIRY_ACTOR,
+        reason: 'confirmation_window_expired',
+      });
       // The row is locked at the version just read, so the cancel cannot lose a race.
       if (!outcome.ok) throw new Error(`expiry could not cancel ${stale.number}: ${outcome.code}`);
       return stale.number;
