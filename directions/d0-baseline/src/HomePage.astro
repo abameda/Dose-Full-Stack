@@ -1,0 +1,119 @@
+---
+// Direction 0's home page: the collection. Data arrives as props (the app loads it).
+import type { Lang, ProductView } from '@dose/contract';
+import { formatEgp } from '@dose/contract/money';
+import { fill, t } from '@dose/shop';
+import Layout from './Layout.astro';
+
+interface Props {
+  lang: Lang;
+  products: ProductView[];
+}
+
+const { lang, products } = Astro.props;
+const s = t(lang);
+
+/** The price a card shows: the cheapest variant on sale, with "from" when there is a choice. */
+function priceLabel(product: ProductView): string | null {
+  const prices = product.variants.map((variant) => variant.price);
+  const lowest = Math.min(...prices);
+  if (prices.length === 0) return null;
+  const formatted = formatEgp(lowest, lang);
+  return new Set(prices).size > 1 ? fill(s.priceFrom, { price: formatted }) : formatted;
+}
+---
+
+<Layout lang={lang} title={s.homeTitle} description={s.homeDescription} path="">
+  <section class="hero">
+    <h1>{s.homeHeading}</h1>
+    <p>{s.homeIntro}</p>
+  </section>
+
+  <section aria-labelledby="collection-heading">
+    <h2 id="collection-heading">{s.collectionHeading}</h2>
+    <ul class="products">
+      {
+        products.map((product, index) => {
+          const image = product.images[0];
+          const label = priceLabel(product);
+          const soldOut = product.variants.length > 0 && product.variants.every((variant) => !variant.available);
+          return (
+            <li class="card">
+              <a href={`/${lang}/products/${product.slug}`}>
+                {image === undefined ? null : (
+                  <img
+                    src={image.src}
+                    alt=""
+                    width={image.width}
+                    height={image.height}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                  />
+                )}
+                <span class="card-name">{product.name}</span>
+              </a>
+              <p class="card-price">
+                {label === null ? null : <bdi>{label}</bdi>}
+                {soldOut ? <span class="card-sold-out">{s.soldOut}</span> : null}
+              </p>
+            </li>
+          );
+        })
+      }
+    </ul>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    padding-block: var(--space-6) var(--space-7);
+    max-inline-size: var(--reading-width);
+  }
+  .hero h1 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-2xl);
+  }
+  .hero p {
+    margin: 0;
+    font-size: var(--text-lg);
+    color: var(--color-text-muted);
+  }
+  h2 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-xl);
+  }
+  .products {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    gap: var(--space-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .card a {
+    display: grid;
+    gap: var(--space-3);
+    text-decoration: none;
+  }
+  .card img {
+    inline-size: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    background: var(--color-surface-sunken);
+    border-radius: var(--radius);
+  }
+  .card-name {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-strong);
+  }
+  .card-price {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+  }
+  .card-sold-out {
+    margin-inline-start: var(--space-2);
+    color: var(--color-danger);
+    font-weight: var(--weight-strong);
+  }
+</style>

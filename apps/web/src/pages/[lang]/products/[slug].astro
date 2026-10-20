@@ -1,0 +1,22 @@
+---
+// A product page: Direction 0's, fed with the published product. Slugs are Latin in both
+// languages, so a link survives a language switch.
+import ProductPage from '@dose/d0-baseline/ProductPage.astro';
+import { loadProduct } from '../../../storefront';
+
+export const prerender = false;
+
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const lang = Astro.locals.lang;
+const slug = Astro.params.slug ?? '';
+if (lang === null || Astro.params.lang !== lang || !SLUG.test(slug)) {
+  return new Response('Not found', { status: 404 });
+}
+const product = await loadProduct(slug, lang);
+if (product === null) {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<ProductPage lang={lang} product={product} />

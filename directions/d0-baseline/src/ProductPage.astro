@@ -1,0 +1,108 @@
+---
+// Direction 0's product page. The photo comes first in the markup with its size reserved and a
+// high fetch priority (it is the largest thing on the page), and the one island is the add-to-bag
+// button, so the page stays well inside its JavaScript budget.
+import type { Lang, ProductView } from '@dose/contract';
+import { AddToBag, fill, t } from '@dose/shop';
+import Layout from './Layout.astro';
+import { DIRECTION_ID } from './index';
+
+interface Props {
+  lang: Lang;
+  product: ProductView;
+}
+
+const { lang, product } = Astro.props;
+const s = t(lang);
+---
+
+<Layout lang={lang} title={fill(s.productTitle, { name: product.name })} description={product.story} path={`/products/${product.slug}`}>
+  <article class="product">
+    <div class="gallery">
+      {
+        product.images.map((image, index) => (
+          <img
+            src={image.src}
+            alt={image.alt}
+            width={image.width}
+            height={image.height}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            fetchpriority={index === 0 ? 'high' : 'auto'}
+            decoding={index === 0 ? 'sync' : 'async'}
+          />
+        ))
+      }
+    </div>
+
+    <div class="info">
+      <h1>{product.name}</h1>
+      <AddToBag client:load lang={lang} direction={DIRECTION_ID} variants={product.variants} />
+      <p class="delivery">{s.productDelivery}</p>
+
+      <section aria-labelledby="story-heading">
+        <h2 id="story-heading">{s.storyHeading}</h2>
+        <p>{product.story}</p>
+      </section>
+
+      <section aria-labelledby="details-heading">
+        <h2 id="details-heading">{s.detailsHeading}</h2>
+        <p>{product.labelCopy}</p>
+      </section>
+
+      <a class="back" href={`/${lang}`}>{s.backToCollection}</a>
+    </div>
+  </article>
+</Layout>
+
+<style>
+  .product {
+    display: grid;
+    gap: var(--space-6);
+  }
+  .gallery {
+    display: grid;
+    gap: var(--space-3);
+  }
+  .gallery img {
+    inline-size: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    background: var(--color-surface-sunken);
+    border-radius: var(--radius);
+  }
+  .info {
+    display: grid;
+    gap: var(--space-5);
+    align-content: start;
+    max-inline-size: var(--reading-width);
+  }
+  h1 {
+    margin: 0;
+    font-size: var(--text-2xl);
+  }
+  h2 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-lg);
+  }
+  p {
+    margin: 0;
+  }
+  .delivery {
+    color: var(--color-text-muted);
+  }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-size);
+  }
+  @media (min-width: 56rem) {
+    .product {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: start;
+    }
+    .gallery {
+      position: sticky;
+      inset-block-start: var(--space-4);
+    }
+  }
+</style>

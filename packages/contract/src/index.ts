@@ -2,15 +2,14 @@
 // that cross the HTTP boundary, plus a Zod schema for every request body. Nothing here touches the
 // database or any commerce rule, so a design direction may import it (boundary rule 1).
 import { z } from 'zod';
+import { MAX_BAG_LINES, MAX_LINE_QUANTITY } from './limits';
 
 /** Storefront language. */
 export const LANGS = ['ar', 'en'] as const;
 export type Lang = (typeof LANGS)[number];
 export const langSchema = z.enum(LANGS);
 
-/** Bag limits (decision 0002): 1-10 units per line, at most 10 lines. */
-export const MAX_BAG_LINES = 10;
-export const MAX_LINE_QUANTITY = 10;
+export { MAX_BAG_LINES, MAX_LINE_QUANTITY } from './limits';
 
 // ── Storefront catalogue ─────────────────────────────────────────────────────────────────────
 

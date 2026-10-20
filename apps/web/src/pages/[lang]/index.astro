@@ -1,6 +1,7 @@
 ---
-// The home page of each language. Task 13 replaces the body with Direction 0's home page.
-import Shell from '../../layouts/Shell.astro';
+// The home page of each language: Direction 0's, fed with the published products.
+import HomePage from '@dose/d0-baseline/HomePage.astro';
+import { loadProducts } from '../../storefront';
 
 export const prerender = false;
 
@@ -8,10 +9,7 @@ const lang = Astro.locals.lang;
 if (lang === null || Astro.params.lang !== lang) {
   return new Response('Not found', { status: 404 });
 }
+const products = await loadProducts(lang);
 ---
 
-<Shell title="DÖSE">
-  <main>
-    <h1>DÖSE</h1>
-  </main>
-</Shell>
+<HomePage lang={lang} products={products} />

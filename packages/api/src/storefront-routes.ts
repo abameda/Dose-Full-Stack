@@ -34,7 +34,8 @@ const REFUSAL_STATUS = {
   checkout_disabled: 403,
 } as const satisfies Record<Exclude<CheckoutResult, { ok: true }>['code'], ContentfulStatusCode>;
 
-function toProductView(row: ProductRow, lang: Lang): ProductView {
+/** A published product as the storefront shows it. Also used by the web app to render its pages. */
+export function toProductView(row: ProductRow, lang: Lang): ProductView {
   const ar = lang === 'ar';
   return {
     slug: row.slug,

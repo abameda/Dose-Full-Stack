@@ -1,20 +1,19 @@
 import process from 'node:process';
 import { defineConfig, devices } from '@playwright/test';
+import { APP_URL, OWNER_URL } from './e2e/support/env';
 
 // End-to-end tests run against the real Worker: `astro build`, then `wrangler dev` serving the
 // build with local R2 (miniflare) and Hyperdrive pointed at the local Postgres of
 // docker-compose.yml (`docker compose up -d` first). Before the build, `pnpm seed --fresh`
 // recreates the `dose_e2e` database, migrates it and seeds the catalogue, so every run starts
-// from the same data. The URLs below are the fixed, dev-only values of docker-compose.yml.
+// from the same data. The database URLs are the fixed, dev-only values of docker-compose.yml
+// (e2e/support/env.ts).
 
 const PORT = 8788;
 const BASE_URL = `http://127.0.0.1:${String(PORT)}`;
 
-const E2E_DATABASE = 'dose_e2e';
-const OWNER_URL =
-  process.env['DOSE_E2E_OWNER_URL'] ?? `postgres://dose_owner:dose_owner_local@127.0.0.1:54329/${E2E_DATABASE}`;
-const APP_URL =
-  process.env['DOSE_E2E_APP_URL'] ?? `postgres://dose_app:dose_app_local@127.0.0.1:54329/${E2E_DATABASE}`;
+/** Tests whose title carries this tag run alone, in the `-serial` projects. */
+const SERIAL = /@serial/;
 
 const server = [
   `pnpm seed --target ${OWNER_URL} --media local --fresh`,
@@ -33,8 +32,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'iphone', use: { ...devices['iPhone 13'] } },
-    { name: 'pixel', use: { ...devices['Pixel 7'] } },
+    { name: 'iphone', use: { ...devices['iPhone 13'] }, grepInvert: SERIAL },
+    { name: 'pixel', use: { ...devices['Pixel 7'] }, grepInvert: SERIAL },
+    // A test tagged @serial changes shared data (a live price), which would fail checkouts running
+    // beside it. These two projects run only those tests, one phone after the other, once
+    // everything else has finished.
+    { name: 'iphone-serial', use: { ...devices['iPhone 13'] }, grep: SERIAL, dependencies: ['iphone', 'pixel'] },
+    { name: 'pixel-serial', use: { ...devices['Pixel 7'] }, grep: SERIAL, dependencies: ['iphone-serial'] },
   ],
   webServer: {
     command: server,

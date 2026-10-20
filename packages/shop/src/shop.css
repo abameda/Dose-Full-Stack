@@ -1,0 +1,213 @@
+/*
+ * Styles for the shop's islands: the bag, the add-to-bag button and the checkout form. Design
+ * tokens only (@dose/ui/tokens.css) and logical properties, so a direction re-themes them and
+ * one rule serves both reading directions.
+ */
+
+/* ── Bag ───────────────────────────────────────────────────────────────────────────────── */
+.dose-bag__lines {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+.dose-bag__line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding-block-end: var(--space-4);
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+.dose-bag__line > p {
+  margin: 0;
+}
+.dose-bag__name {
+  font-weight: var(--weight-strong);
+}
+.dose-bag__quantity,
+.dose-bag__note,
+.dose-bag__unavailable {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.dose-bag__unavailable {
+  color: var(--color-danger);
+}
+.dose-bag__stepper {
+  display: flex;
+  gap: var(--space-2);
+}
+.dose-bag__stepper .dose-btn {
+  padding-inline: var(--space-3);
+}
+.dose-bag__price {
+  justify-self: end;
+  font-weight: var(--weight-strong);
+}
+.dose-bag__subtotal {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+}
+
+/* ── Add to bag ────────────────────────────────────────────────────────────────────────── */
+.dose-add {
+  display: grid;
+  gap: var(--space-4);
+}
+.dose-add__price {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-strong);
+}
+.dose-add__sizes {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.dose-add__sizes legend {
+  padding: 0;
+  margin-block-end: var(--space-2);
+  font-weight: var(--weight-strong);
+}
+.dose-add__size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-size);
+}
+.dose-add__status {
+  min-block-size: 1.5em;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* ── Checkout ──────────────────────────────────────────────────────────────────────────── */
+.dose-checkout {
+  display: grid;
+  gap: var(--space-6);
+}
+.dose-checkout__fields {
+  display: grid;
+  gap: var(--space-5);
+}
+.dose-checkout__group {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.dose-checkout__group legend {
+  padding: 0;
+  margin-block-end: var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+}
+.dose-checkout__cod,
+.dose-checkout__summary {
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+.dose-checkout__cod h2,
+.dose-checkout__summary h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+}
+.dose-checkout__cod p {
+  margin: 0;
+}
+.dose-checkout__summary {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+.dose-checkout__summary > * {
+  margin-block: 0;
+}
+.dose-checkout__notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-notice-surface);
+  font-weight: var(--weight-strong);
+}
+.dose-checkout__notice--fields,
+.dose-checkout__notice--failure,
+.dose-checkout__notice--stock {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.dose-checkout__empty {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+.dose-summary__lines {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dose-summary__line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.dose-summary__qty {
+  color: var(--color-text-muted);
+}
+.dose-summary__short {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-danger);
+  font-weight: var(--weight-strong);
+}
+.dose-summary__totals {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: var(--border-width) solid var(--color-border-strong);
+}
+.dose-summary__totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.dose-summary__totals dt,
+.dose-summary__totals dd {
+  margin: 0;
+}
+.dose-summary__total {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+}
+
+@media (min-width: 56rem) {
+  .dose-checkout {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+  }
+  .dose-checkout__summary {
+    position: sticky;
+    inset-block-start: var(--space-5);
+  }
+}
