@@ -15,7 +15,8 @@
     "./governorates": "./src/governorates.ts",
     "./phone": "./src/phone.ts",
     "./address": "./src/address.ts",
-    "./checkout": "./src/checkout.ts"
+    "./checkout": "./src/checkout.ts",
+    "./order-actions": "./src/order-actions.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
