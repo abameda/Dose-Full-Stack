@@ -20,6 +20,9 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | Vitest | 5.0.5 | Test runner. Vitest 5 has no `vitest.workspace.ts` (removed in favour of `test.projects`), so the root `vitest.config.ts` lists `packages/*`, `directions/*`, `apps/*`, `test/*` as projects. |
 | dependency-cruiser | 18.6.0 | Enforces the code boundaries (`.dependency-cruiser.cjs`, run by `pnpm boundaries`). 18.7.0 was published less than two weeks before this task, so 18.6.0 is used and the supply-chain age gate needs no exclusion. |
 | @types/node | 24.19.2 | Node types for the boundaries test and script. TypeScript 6 no longer loads `@types` implicitly, so `test/boundaries/tsconfig.json` lists `types: ["node"]`. Latest 24.x, matching Node 24. |
+| pg | 8.23.1 | Postgres driver for `@dose/core` (`createPoolDb` on Node, `createRequestDb` on Workers). Released 2026-09-30. |
+| @types/pg | 8.23.1 | Types for `pg`; dev dependency of `@dose/core`. |
+| Postgres (local and CI) | 18 (`postgres:18` image) | `docker-compose.yml` for local development (port 54329) and the CI service container. Neon runs the production branches; the version is confirmed when the Neon project is created. |
 
 TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` and `moduleResolution: Bundler` in `tsconfig.base.json`. Packages extend it. Source imports are extensionless.
 

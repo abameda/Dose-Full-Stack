@@ -16,6 +16,21 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Same fixed, dev-only values as docker-compose.yml; the tests default to them.
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: dose_owner
+          POSTGRES_PASSWORD: dose_owner_local
+          POSTGRES_DB: dose
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U dose_owner -d dose"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
         with:
