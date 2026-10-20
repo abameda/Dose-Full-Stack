@@ -26,3 +26,6 @@ allowBuilds:
 # pinned wrangler (4.147.0), so the plugin and the CLI run the same workerd and miniflare.
 overrides:
   '@cloudflare/vite-plugin': 1.62.5
+  # miniflare (inside wrangler) pins an older sharp that `pnpm audit` flags (GHSA-wq5f-xc86-pv6w,
+  # patched in 0.35.5); run the release the seed already uses.
+  sharp: 0.35.5

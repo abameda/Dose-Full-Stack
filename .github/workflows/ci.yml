@@ -55,7 +55,7 @@ jobs:
 
       # TEMPORARY DEBUG (removed in the next commit): list what gitleaks flagged, redacted, as annotations.
       - name: Debug gitleaks findings
-        if: failure()
+        if: always()
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar xz gitleaks
           ./gitleaks detect --redact --no-banner --report-format json --report-path r.json --exit-code 0 || true
