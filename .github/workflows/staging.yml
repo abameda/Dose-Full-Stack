@@ -1,0 +1,96 @@
+# Staging: after CI passes on main (or when run by hand), migrates the staging database, builds and
+# deploys the `staging` Worker (dose-web-staging), then runs the @staging end-to-end tests against
+# it through Cloudflare Access. See docs/runbooks/environments.md.
+#
+# Repository variables (non-secret IDs and URLs):
+#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account
+#   NEON_NONPROD_PROJECT_ID  the Neon project that holds the `staging` branch
+#   STAGING_URL              the staging Worker's URL
+#   E2E_STAFF_NAME           the staff name of the Access service token (as `pnpm staff:add --name`)
+# Repository secrets (credentials):
+#   CLOUDFLARE_API_TOKEN     deploys the Worker
+#   NEON_API_KEY             reads the staging branch's owner connection string
+#   CF_ACCESS_CLIENT_ID      the Access service token the tests sign in with (an owner in staff)
+#   CF_ACCESS_CLIENT_SECRET
+#
+# The credentials are given only to the steps that use them, never to `pnpm install`. No step
+# prints a secret or the connection string.
+name: Staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit CI tested, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Owner connection string of the staging branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          owner_url="$(npx -y neonctl@8.0.11 connection-string staging --project-id "$NEON_NONPROD_PROJECT_ID" --role-name dose_owner --database-name dose)"
+          if [ -z "$owner_url" ]; then echo "neonctl returned no connection string" >&2; exit 1; fi
+          echo "::add-mask::$owner_url"
+          echo "OWNER_URL=$owner_url" >> "$GITHUB_ENV"
+
+      - name: Migrate the staging database
+        run: pnpm migrate --target "$OWNER_URL" --allow-remote
+
+      - name: Build the staging Worker
+        run: pnpm --filter @dose/web build
+        env:
+          CLOUDFLARE_ENV: staging
+
+      - name: Deploy the staging Worker
+        run: pnpm --filter @dose/web exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: End-to-end tests against staging
+        run: pnpm e2e
+        env:
+          E2E_BASE_URL: ${{ vars.STAGING_URL }}
+          E2E_STAFF_NAME: ${{ vars.E2E_STAFF_NAME }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Upload the Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-staging
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

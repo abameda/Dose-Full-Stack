@@ -17,6 +17,8 @@ dist/
 !.env.example
 .dev.vars
 .astro/
+# The seed photos the web build serves as static assets (packages/core/scripts/seed-media.ts)
+apps/web/public/media/
 
 # Playwright output
 test-results/

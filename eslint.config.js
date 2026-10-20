@@ -11,6 +11,8 @@ export default tseslint.config(
       'test-results/**',
       'playwright-report/**',
       'graphify-out/**',
+      // The git-ignored workspace of the development process; its helper scripts are not part of the project.
+      '.superpowers/**',
       // Deliberately invalid input for the boundaries test; it is never compiled or linted.
       'test/boundaries/fixtures/**',
     ],

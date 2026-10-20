@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import type { Db, Tx } from '../src/db';
 import { receiveStock } from '../src/stock';
@@ -141,15 +141,8 @@ export async function seedCatalogue(
   media: MediaStore,
   { localStaff, imagesDir = SEED_IMAGES_DIR }: SeedOptions,
 ): Promise<SeedResult> {
-  const images: SeedResult['images'] = [];
-  for (const product of SEED_PRODUCTS) {
-    for (const image of product.images) {
-      const bytes = await prepareImage(await readFile(new URL(image.file, imagesDir)));
-      const key = imageKey(product.slug, bytes);
-      await media.put(key, bytes, 'image/jpeg');
-      images.push({ slug: product.slug, key, bytes });
-    }
-  }
+  const images = await prepareSeedImages(imagesDir);
+  for (const image of images) await media.put(image.key, image.bytes, 'image/jpeg');
 
   const stock = await owner.transaction(async (tx) => {
     const received: SeedResult['stock'] = {};
@@ -176,6 +169,35 @@ export async function seedCatalogue(
   });
 
   return { images, stock };
+}
+
+/** Every seed photo re-encoded (`prepareImage`) under its key (`imageKey`), in catalogue order. */
+async function prepareSeedImages(imagesDir: URL): Promise<SeedResult['images']> {
+  const images: SeedResult['images'] = [];
+  for (const product of SEED_PRODUCTS) {
+    for (const image of product.images) {
+      const bytes = await prepareImage(await readFile(new URL(image.file, imagesDir)));
+      images.push({ slug: product.slug, key: imageKey(product.slug, bytes), bytes });
+    }
+  }
+  return images;
+}
+
+/**
+ * Writes every seed photo to `<dir>/<key>` with exactly the bytes `seedCatalogue` stores under that
+ * key, after removing `<dir>/products/` so no photo of an earlier build lingers. The web build serves
+ * them as static assets at `/media/<key>` where there is no R2 bucket (decision 0011). Returns the keys.
+ */
+export async function writeSeedMediaAssets(dir: URL, imagesDir: URL = SEED_IMAGES_DIR): Promise<string[]> {
+  const root = new URL(dir.href.endsWith('/') ? dir.href : `${dir.href}/`);
+  await rm(new URL('products/', root), { recursive: true, force: true });
+  const images = await prepareSeedImages(imagesDir);
+  for (const image of images) {
+    const file = new URL(image.key, root);
+    await mkdir(new URL('./', file), { recursive: true });
+    await writeFile(file, image.bytes);
+  }
+  return images.map((i) => i.key);
 }
 
 async function upsertProduct(tx: Tx, p: SeedProduct): Promise<string> {

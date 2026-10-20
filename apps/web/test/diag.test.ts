@@ -1,3 +1,4 @@
+import { createApp } from '@dose/api';
 import type { Staff } from '@dose/contract';
 import type { Db } from '@dose/core/db';
 import { expect, test, vi } from 'vitest';
@@ -47,14 +48,29 @@ function expectPrivate(response: Response | null) {
   expect(Object.fromEntries(response?.headers ?? [])).toMatchObject(PRIVATE);
 }
 
-test.each([IDENTITY_PATH, RYW_PATH])('%s is a plain 404 in production, before anyone is asked who they are', async (path) => {
+test.each([IDENTITY_PATH, RYW_PATH])('%s goes to the commerce API in production, before anyone is asked who they are', async (path) => {
   const { deps: d, verifyStaff, dbFactory } = deps({ environment: 'production' });
-  const response = await handleDiag(get(path), d);
-  expect(response?.status).toBe(404);
-  expectPrivate(response);
-  expect(await response?.text()).toBe('Not found');
+  expect(await handleDiag(get(path), d)).toBeNull();
   expect(verifyStaff).not.toHaveBeenCalled();
   expect(dbFactory).not.toHaveBeenCalled();
+});
+
+test('in production the commerce API answers the diagnostic paths exactly as any unknown /api path', async () => {
+  const app = createApp({
+    db: () => fakeDb().db,
+    env: 'production',
+    now: () => new Date(),
+    verifyStaff: () => Promise.resolve(STAFF),
+    webhookProviders: {},
+  });
+  const answer = async (path: string) => {
+    const response = await app.fetch(get(path));
+    return { status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() };
+  };
+  const unknown = await answer('/api/no-such-path');
+  expect(unknown).toEqual({ status: 404, headers: expect.anything() as unknown, body: '{"error":"not_found"}' });
+  expect(await answer(IDENTITY_PATH)).toEqual(unknown);
+  expect(await answer(RYW_PATH)).toEqual(unknown);
 });
 
 test.each([IDENTITY_PATH, RYW_PATH])('%s is a 401 for anyone but active staff, private, and opens no database', async (path) => {

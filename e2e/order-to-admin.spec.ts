@@ -2,15 +2,15 @@ import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Lang, ProductView } from '../packages/contract/src/index';
-import { OWNER_HEADERS } from './support/env';
+import { OPERATIONS_HEADERS, OPERATIONS_NAME, OWNER_HEADERS, REMOTE } from './support/env';
 import { BLANC_SKU, LANGS, fillCheckout, hydrated, orderDetail, orderNumberFromUrl, seedBag, testCustomer, words } from './support/shop';
 
 // Section G, criterion 1: a customer's cash-on-delivery order reaches the admin by itself, staff
-// confirm it, and the timeline and the audit log say who did what. Signed in with the local dev
-// header (`ENVIRONMENT:local`, see playwright.config.ts): as operations to work the queue, as the
-// owner to read the audit log.
-
-const OPERATIONS_HEADERS = { 'X-Dev-Staff-Email': 'operations@example.test' } as const;
+// confirm it, and the timeline and the audit log say who did what. Locally staff sign in with the
+// dev header (`ENVIRONMENT:local`, see playwright.config.ts): as operations to work the queue, as
+// the owner to read the audit log. That flow is tagged @staging and also runs against staging,
+// where the Access service token is the one staff member, an owner (e2e/support/env.ts). The other
+// tests need two roles or local data, so they run locally only.
 const DELIVERY_FEE = 7_000; // decision 0002: EGP 70 for every governorate until M2
 
 /** The customer's phone as the admin shows it: E.164, from a number typed as `010…`. */
@@ -70,92 +70,93 @@ test.describe('from the storefront to the admin', () => {
   test.setTimeout(90_000);
 
   for (const lang of LANGS) {
-    test(`an order placed in ${lang} appears on Today by itself, is confirmed on WhatsApp, and is in the timeline and the audit log`, async ({
-      page,
-      context,
-      request,
-    }) => {
-      // Operations opens Today and leaves it alone.
-      await page.goto('/admin');
-      await expect(page.getByRole('heading', { name: 'Orders to confirm' })).toBeVisible();
-      await expect(page.getByTestId('to-confirm-count')).toBeVisible();
-      await page.evaluate(() => {
-        (window as unknown as { __noReload: boolean }).__noReload = true;
-      });
-      const nav = page.getByRole('navigation', { name: 'Admin' });
-      await expect(nav.getByRole('link', { name: 'Orders' })).toBeVisible();
-      await expect(nav.getByRole('link', { name: 'Audit log' })).toHaveCount(0);
+    test(
+      `an order placed in ${lang} appears on Today by itself, is confirmed on WhatsApp, and is in the timeline and the audit log`,
+      { tag: '@staging' },
+      async ({ page, context, request }) => {
+        // Operations opens Today and leaves it alone.
+        await page.goto('/admin');
+        await expect(page.getByRole('heading', { name: 'Orders to confirm' })).toBeVisible();
+        await expect(page.getByTestId('to-confirm-count')).toBeVisible();
+        await page.evaluate(() => {
+          (window as unknown as { __noReload: boolean }).__noReload = true;
+        });
+        const nav = page.getByRole('navigation', { name: 'Admin' });
+        await expect(nav.getByRole('link', { name: 'Orders' })).toBeVisible();
+        // Operations has no audit log; remotely the one staff member is an owner, who has.
+        await expect(nav.getByRole('link', { name: 'Audit log' })).toHaveCount(REMOTE ? 1 : 0);
 
-      // A customer, on another page, places an order.
-      const shopper = await context.newPage();
-      const { number, phone } = await orderOnStorefront(shopper, lang);
-      await shopper.close();
+        // A customer, on another page, places an order.
+        const shopper = await context.newPage();
+        const { number, phone } = await orderOnStorefront(shopper, lang);
+        await shopper.close();
 
-      // Within 10 seconds it is on Today, without a reload.
-      await page.bringToFront();
-      const row = page.getByRole('link', { name: new RegExp(number) });
-      await expect(row).toBeVisible({ timeout: 10_000 });
-      expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
+        // Within 10 seconds it is on Today, without a reload.
+        await page.bringToFront();
+        const row = page.getByRole('link', { name: new RegExp(number) });
+        await expect(row).toBeVisible({ timeout: 10_000 });
+        expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
 
-      // Open it.
-      await row.click();
-      await page.waitForURL(`**/admin/orders/${number}`);
-      await expect(page.getByRole('heading', { name: `Order ${number}` })).toBeVisible();
-      await expect(page.getByTestId('order-state')).toHaveText('Pending');
-      await expect(page.getByText(phone, { exact: true })).toBeVisible();
-      const timeline = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem');
-      await expect(timeline).toHaveCount(1);
-      await expect(timeline.first()).toContainText(`Placed by customer ${phone}`);
+        // Open it.
+        await row.click();
+        await page.waitForURL(`**/admin/orders/${number}`);
+        await expect(page.getByRole('heading', { name: `Order ${number}` })).toBeVisible();
+        await expect(page.getByTestId('order-state')).toHaveText('Pending');
+        await expect(page.getByText(phone, { exact: true })).toBeVisible();
+        const timeline = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem');
+        await expect(timeline).toHaveCount(1);
+        await expect(timeline.first()).toContainText(`Placed by customer ${phone}`);
 
-      // Confirm it: the method is required, and WhatsApp opens the chat with the message ready.
-      await page.getByRole('button', { name: 'Confirm', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: `Confirm order ${number}` });
-      const submit = dialog.getByRole('button', { name: 'Confirm order' });
-      await expect(submit).toBeDisabled();
-      const whatsapp = dialog.getByRole('link', { name: /WhatsApp/ });
-      const href = new URL((await whatsapp.getAttribute('href')) ?? '');
-      expect(href.origin + href.pathname).toBe(`https://wa.me/${phone.slice(1)}`);
-      const text = href.searchParams.get('text') ?? '';
-      expect(text).toContain(number);
-      if (lang === 'ar') expect(text).toMatch(/\p{Script=Arabic}/u);
-      else expect(text).not.toMatch(/\p{Script=Arabic}/u);
-      await dialog.getByRole('radio', { name: 'WhatsApp' }).check();
-      await expect(submit).toBeEnabled();
-      await submit.click();
+        // Confirm it: the method is required, and WhatsApp opens the chat with the message ready.
+        await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: `Confirm order ${number}` });
+        const submit = dialog.getByRole('button', { name: 'Confirm order' });
+        await expect(submit).toBeDisabled();
+        const whatsapp = dialog.getByRole('link', { name: /WhatsApp/ });
+        const href = new URL((await whatsapp.getAttribute('href')) ?? '');
+        expect(href.origin + href.pathname).toBe(`https://wa.me/${phone.slice(1)}`);
+        const text = href.searchParams.get('text') ?? '';
+        expect(text).toContain(number);
+        if (lang === 'ar') expect(text).toMatch(/\p{Script=Arabic}/u);
+        else expect(text).not.toMatch(/\p{Script=Arabic}/u);
+        await dialog.getByRole('radio', { name: 'WhatsApp' }).check();
+        await expect(submit).toBeEnabled();
+        await submit.click();
 
-      // The order is confirmed, and the timeline says who confirmed it and how.
-      await expect(dialog).toBeHidden();
-      await expect(page.getByTestId('order-state')).toHaveText('Confirmed');
-      await expect(timeline).toHaveCount(2);
-      await expect(timeline.nth(0)).toContainText(`Placed by customer ${phone}`);
-      await expect(timeline.nth(1)).toContainText('Confirmed by Local Operations · WhatsApp');
-      await expect(page.getByRole('button', { name: 'Confirm', exact: true })).toHaveCount(0);
-      expect((await orderDetail(request, number)).orderState).toBe('confirmed');
+        // The order is confirmed, and the timeline says who confirmed it and how.
+        await expect(dialog).toBeHidden();
+        await expect(page.getByTestId('order-state')).toHaveText('Confirmed');
+        await expect(timeline).toHaveCount(2);
+        await expect(timeline.nth(0)).toContainText(`Placed by customer ${phone}`);
+        await expect(timeline.nth(1)).toContainText(`Confirmed by ${OPERATIONS_NAME} · WhatsApp`);
+        await expect(page.getByRole('button', { name: 'Confirm', exact: true })).toHaveCount(0);
+        expect((await orderDetail(request, number)).orderState).toBe('confirmed');
 
-      // It has left Today.
-      await page.getByRole('link', { name: 'Today' }).click();
-      await expect(page.getByRole('heading', { name: 'Orders to confirm' })).toBeVisible();
-      await expect(page.getByRole('link', { name: new RegExp(number) })).toHaveCount(0);
+        // It has left Today.
+        await page.getByRole('link', { name: 'Today' }).click();
+        await expect(page.getByRole('heading', { name: 'Orders to confirm' })).toBeVisible();
+        await expect(page.getByRole('link', { name: new RegExp(number) })).toHaveCount(0);
 
-      // The owner's audit log shows the same two events, newest first.
-      await context.setExtraHTTPHeaders(OWNER_HEADERS);
-      await page.goto('/admin/audit');
-      const table = page.getByRole('table', { name: 'Audit log' });
-      await expect(table).toBeVisible();
-      const rowsFor = table.getByRole('row').filter({ hasText: number });
-      for (let pages = 0; pages < 40 && (await rowsFor.count()) < 2; pages++) {
-        const older = page.getByRole('button', { name: 'Load older events' });
-        if (!(await older.isVisible())) break;
-        const before = await table.getByRole('row').count();
-        await older.click();
-        await expect.poll(() => table.getByRole('row').count()).toBeGreaterThan(before);
-      }
-      await expect(rowsFor).toHaveCount(2);
-      await expect(rowsFor.nth(0)).toContainText('Order confirmed · WhatsApp');
-      await expect(rowsFor.nth(0)).toContainText('Local Operations');
-      await expect(rowsFor.nth(1)).toContainText('Order placed');
-      await expect(rowsFor.nth(1)).toContainText(`Customer ${phone}`);
-    });
+        // The owner's audit log shows the same two events, newest first.
+        await context.setExtraHTTPHeaders(OWNER_HEADERS);
+        await page.goto('/admin/audit');
+        const table = page.getByRole('table', { name: 'Audit log' });
+        await expect(table).toBeVisible();
+        const rowsFor = table.getByRole('row').filter({ hasText: number });
+        for (let pages = 0; pages < 40 && (await rowsFor.count()) < 2; pages++) {
+          const older = page.getByRole('button', { name: 'Load older events' });
+          if (!(await older.isVisible())) break;
+          const before = await table.getByRole('row').count();
+          await older.click();
+          await expect.poll(() => table.getByRole('row').count()).toBeGreaterThan(before);
+        }
+        await expect(rowsFor).toHaveCount(2);
+        await expect(rowsFor.nth(0)).toContainText('Order confirmed · WhatsApp');
+        await expect(rowsFor.nth(0)).toContainText(OPERATIONS_NAME);
+        await expect(rowsFor.nth(1)).toContainText('Order placed');
+        await expect(rowsFor.nth(1)).toContainText(`Customer ${phone}`);
+      },
+    );
   }
 
   test('the order list searches by phone and filters by state; cancel needs a reason and a note for Other', async ({ page, request }) => {
@@ -188,7 +189,7 @@ test.describe('from the storefront to the admin', () => {
     await expect(page.getByTestId('order-state')).toHaveText('Cancelled');
     await expect(page.getByTestId('payment-state')).toHaveText('Voided');
     const entries = page.getByRole('list', { name: 'Timeline' }).getByRole('listitem');
-    await expect(entries.nth(1)).toContainText('Cancelled by Local Operations · Other');
+    await expect(entries.nth(1)).toContainText(`Cancelled by ${OPERATIONS_NAME} · Other`);
     await expect(entries.nth(1)).toContainText('Customer changed their mind on Instagram');
   });
 

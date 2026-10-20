@@ -69,10 +69,10 @@ function identityOf(payload: JWTPayload): string | null {
 }
 
 /** The active staff member with this identity (an email, or a service token's client ID; compared without regard to case), or null. */
-export async function findActiveStaff(db: Tx, email: string): Promise<Staff | null> {
+export async function findActiveStaff(db: Tx, identity: string): Promise<Staff | null> {
   const [row] = await db.query<{ id: string; email: string; name: string; role: string }>(
     `select id, email::text as email, name, role from staff where email = $1::citext and active`,
-    [email],
+    [identity],
   );
   if (row === undefined) return null;
   const role = ROLES.find((r) => r === row.role);

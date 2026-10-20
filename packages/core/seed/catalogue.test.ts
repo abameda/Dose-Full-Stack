@@ -1,10 +1,22 @@
 import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { listPublishedProducts } from '../src/catalogue';
 import { checkRules } from '../src/rules';
 import { withTestDb } from '../test/harness';
-import { imageKey, prepareImage, PRODUCT_IMAGE_SIZE, SEED_PRODUCTS, seedCatalogue, type MediaStore } from './catalogue';
+import {
+  imageKey,
+  prepareImage,
+  PRODUCT_IMAGE_SIZE,
+  SEED_PRODUCTS,
+  seedCatalogue,
+  writeSeedMediaAssets,
+  type MediaStore,
+} from './catalogue';
 
 /** Keeps what was uploaded, as R2 would. */
 function memoryMedia(): MediaStore & { objects: Map<string, { bytes: Uint8Array; contentType: string }> } {
@@ -136,5 +148,41 @@ describe('seedCatalogue', () => {
     expect(Object.values(first.stock)).toEqual(['applied', 'applied']);
     expect(Object.values(second.stock)).toEqual(['duplicate', 'duplicate']);
     expect(second.images.map((i) => i.key)).toEqual(first.images.map((i) => i.key));
+  });
+});
+
+describe('writeSeedMediaAssets', () => {
+  /** Every file under `dir`, as a path relative to it with forward slashes. */
+  async function filesUnder(dir: string): Promise<string[]> {
+    const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+    return entries
+      .filter((e) => e.isFile())
+      .map((e) => join(e.parentPath, e.name).slice(dir.length + 1).replaceAll('\\', '/'))
+      .sort();
+  }
+
+  it('writes each photo at the key seedCatalogue records, with the bytes it stores, and nothing else', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dose-media-'));
+    try {
+      // A photo of an earlier build, which must not survive.
+      await mkdir(join(dir, 'products', 'paradise'), { recursive: true });
+      await writeFile(join(dir, 'products', 'paradise', `${'0'.repeat(64)}.jpg`), 'old');
+
+      const keys = await writeSeedMediaAssets(pathToFileURL(dir));
+
+      const db = await withTestDb();
+      const media = memoryMedia();
+      await seedCatalogue(db.owner, media, { localStaff: false });
+      const rows = await db.owner.query<{ r2_key: string }>(`select r2_key from product_images order by r2_key`);
+      const recorded = rows.map((r) => r.r2_key);
+
+      expect(await filesUnder(dir)).toEqual(recorded);
+      expect([...keys].sort()).toEqual(recorded);
+      for (const key of recorded) {
+        expect(new Uint8Array(await readFile(join(dir, key)))).toEqual(media.objects.get(key)?.bytes);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

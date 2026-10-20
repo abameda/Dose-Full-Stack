@@ -29,6 +29,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "rules:check": "node scripts/check-rules.ts",
     "seed": "tsx seed/run.ts",
+    "seed:media": "tsx scripts/seed-media.ts",
+    "migrate": "tsx scripts/migrate.ts",
     "env:identity": "tsx scripts/env-identity.ts",
     "staff:add": "tsx scripts/staff-add.ts"
   },

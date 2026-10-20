@@ -6,7 +6,8 @@ import { errors, type JWTVerifyGetKey } from 'jose';
 /** The Worker's bindings and variables, as declared in wrangler.jsonc. */
 export interface WorkerEnv {
   HYPERDRIVE: Hyperdrive;
-  MEDIA: R2Bucket;
+  /** Absent in the cloud environments of Milestone 1, which serve the seed photos as static assets (decision 0011). */
+  MEDIA?: R2Bucket;
   ENVIRONMENT: string;
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUD: string;
@@ -35,10 +36,10 @@ function staffVerifier(env: WorkerEnv, environment: ApiDeps['env']): ApiDeps['ve
   if (!configured && environment !== 'local') {
     throw new Error('ACCESS_TEAM_DOMAIN and ACCESS_AUD must be set outside local development');
   }
-  const lookup = async (email: string) => {
+  const lookup = async (identity: string) => {
     const db = requestDb(env);
     try {
-      return await findActiveStaff(db, email);
+      return await findActiveStaff(db, identity);
     } finally {
       await db.close();
     }

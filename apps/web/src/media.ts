@@ -11,9 +11,13 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 const notFound = () => new Response('Not found', { status: 404 });
 
-/** `GET /media/<key>`: streams a content-hashed product image from R2, or 404. */
-export async function serveMedia(bucket: Pick<R2Bucket, 'get'>, key: string | undefined): Promise<Response> {
-  if (key === undefined || !MEDIA_KEY.test(key)) return notFound();
+/**
+ * `GET /media/<key>`: streams a content-hashed product image from R2, or 404. Without a bucket (the
+ * cloud environments of Milestone 1, decision 0011) the Worker's static assets answer for the seed
+ * photos before this route runs, so anything that reaches it is a 404.
+ */
+export async function serveMedia(bucket: Pick<R2Bucket, 'get'> | undefined, key: string | undefined): Promise<Response> {
+  if (bucket === undefined || key === undefined || !MEDIA_KEY.test(key)) return notFound();
 
   const object = await bucket.get(key);
   if (object === null) return notFound();

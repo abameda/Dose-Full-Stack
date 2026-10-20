@@ -5,7 +5,8 @@ import { withPrivateHeaders } from './staff-guard';
 // Two diagnostics for staff to check a deployed environment, served at `/api/_diag/*`. They live
 // here, not in `pages/api/_diag/`, because Astro does not route files or folders whose name starts
 // with `_`; `pages/api/[...path].ts` hands exactly these two paths (GET) to `handleDiag` before the
-// commerce API. They do not exist in production.
+// commerce API. They do not exist in production: there `handleDiag` hands them on too, and the
+// commerce API answers them as it answers any unknown `/api` path, so a prober cannot tell them apart.
 
 const DB_IDENTITY_PATH = '/api/_diag/db-identity';
 const READ_YOUR_WRITES_PATH = '/api/_diag/read-your-writes';
@@ -17,7 +18,7 @@ const TRACE_URL = 'https://cloudflare.com/cdn-cgi/trace';
 const TRACE_TIMEOUT_MS = 2000;
 
 export interface DiagDeps {
-  /** `ENVIRONMENT` of the Worker. `production` has no diagnostics. */
+  /** `ENVIRONMENT` of the Worker. `production` has no diagnostics (`handleDiag` returns null). */
   environment: string;
   /** Who is asking. Called only outside production. */
   verifyStaff: (req: Request) => Promise<Staff | null>;
@@ -74,17 +75,15 @@ function coloOf(req: Request): string | null {
 }
 
 /**
- * The diagnostic response for `req`, or null when `req` is not one of the two diagnostic requests
- * (exactly these paths, GET), which then go to the commerce API unchanged. Production is a plain
- * 404 before anything else is checked; anyone but active staff is a 401; a fault is a 500. Every
- * response is private and not indexed.
+ * The diagnostic response for `req`, or null when the request goes to the commerce API unchanged:
+ * every request in production (checked before anything else, so the API's own 404 answers the
+ * diagnostic paths there), and anything but exactly these two paths with GET elsewhere. Anyone but
+ * active staff is a 401; a fault is a 500. Every response is private and not indexed.
  */
 export async function handleDiag(req: Request, deps: DiagDeps): Promise<Response | null> {
-  if (req.method !== 'GET') return null;
+  if (deps.environment === 'production' || req.method !== 'GET') return null;
   const { pathname } = new URL(req.url);
   if (pathname !== DB_IDENTITY_PATH && pathname !== READ_YOUR_WRITES_PATH) return null;
-
-  if (deps.environment === 'production') return reply('Not found', 404, 'text/plain; charset=utf-8');
 
   let db: Db | undefined;
   try {

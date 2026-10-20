@@ -37,6 +37,13 @@ test('a missing object is a 404', async () => {
   expect((await serveMedia(media, KEY)).status).toBe(404);
 });
 
+test('without a bucket, even a well-formed key is a 404 like an unknown key', async () => {
+  const response = await serveMedia(undefined, KEY);
+  expect(response.status).toBe(404);
+  expect(response.headers.get('cache-control')).toBeNull();
+  expect(await response.text()).toBe('Not found');
+});
+
 test.each([
   ['no key', undefined],
   ['an empty key', ''],

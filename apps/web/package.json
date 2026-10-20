@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "build": "astro build",
+    "build": "pnpm --filter @dose/core run seed:media --out ../../apps/web/public/media && astro build",
     "dev": "astro dev"
   },
   "dependencies": {

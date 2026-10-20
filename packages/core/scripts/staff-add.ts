@@ -27,7 +27,7 @@ if (target === undefined || target === '') throw new Error('--target <owner data
 if (identity === undefined) throw new Error('--identity <email or Access service-token client ID> is required');
 if (name === undefined) throw new Error('--name <name> is required');
 if (role === undefined) throw new Error('--role <owner|operations|marketing|accountant> is required');
-checkSeedTarget(target, { allowRemote, fresh: false });
+checkSeedTarget(target, { allowRemote, fresh: false, production: true });
 
 const db = createRequestDb(target);
 try {

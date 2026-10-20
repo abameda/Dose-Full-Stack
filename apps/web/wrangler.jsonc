@@ -2,6 +2,11 @@
 // `astro build` writes the deployable config (dist/server/wrangler.json) from this file.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
+  // DÖSE's own Cloudflare account (decision 0008); the only account this repository deploys to.
+  "account_id": "a61331a1643fa91a513c9cb775d7d619",
+  // The top level is local development and the fail-closed default; the cloud Workers are the
+  // environments below (`CLOUDFLARE_ENV=<name> astro build`, see docs/runbooks/environments.md).
+  // No Worker is bound to production in Milestone 1, so there is no `production` environment.
   "name": "dose-web",
   // The Astro request handler plus the cron's scheduled handler.
   "main": "./src/worker-scheduled.ts",
@@ -11,7 +16,7 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      // Placeholder until the Hyperdrive config exists (Task 17); `wrangler dev` never reads it.
+      // Never deployed (each environment below has its own); `wrangler dev` never reads it.
       "id": "00000000000000000000000000000000",
       // Local Postgres of docker-compose.yml as the application role; fixed, dev-only values.
       // Override with CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE (the e2e tests do).
@@ -31,5 +36,36 @@
   },
   // Expire stale cash-on-delivery orders, then drain the outbox.
   "triggers": { "crons": ["*/5 * * * *"] },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Bindings and vars are not inherited by environments, so each declares all of its own. Neither
+  // has an R2 bucket: until launch the build serves the seed photos as static assets (decision 0011).
+  // The placement hint keeps the Worker beside the Neon database in Frankfurt (belief B1).
+  "env": {
+    // dose-web-staging: deployed from main by .github/workflows/staging.yml.
+    "staging": {
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "50106e4cc55d4ce5bd26f93a1a5b49a0" }],
+      "vars": {
+        "ENVIRONMENT": "staging",
+        // Filled in after the Cloudflare Access setup (Task 17/18).
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": ""
+      },
+      "placement": { "region": "aws:eu-central-1" },
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "observability": { "enabled": true }
+    },
+    // dose-web-poc: the proof-of-concept Worker; no cron, so it never expires or drains anything.
+    "poc": {
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "16583f17bc9d45349915598b9ef8e5a5" }],
+      "vars": {
+        "ENVIRONMENT": "staging",
+        // Filled in after the Cloudflare Access setup (Task 17/18).
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": ""
+      },
+      "placement": { "region": "aws:eu-central-1" },
+      "triggers": { "crons": [] },
+      "observability": { "enabled": true }
+    }
+  }
 }

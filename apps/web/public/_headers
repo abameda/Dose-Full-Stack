@@ -1,0 +1,6 @@
+# Workers static-assets headers. Where there is no R2 bucket (decision 0011), the build writes the
+# seed photos to public/media/products/<slug>/<sha256>.jpg: the hash is in the name, so they never
+# change and are cached forever, as the /media route does for R2.
+/media/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff

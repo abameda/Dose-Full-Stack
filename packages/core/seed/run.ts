@@ -1,11 +1,13 @@
-// `pnpm seed --target <ownerUrl> --media local|r2 [--bucket <name>] [--fresh] [--allow-remote]`
+// `pnpm seed --target <ownerUrl> --media local|r2|none [--bucket <name>] [--fresh] [--allow-remote]`
 //
 // Migrates the target database, then seeds it (seed/catalogue.ts) and uploads the images.
 //   --target        Postgres URL of the owner role (`dose_owner`) for the database to seed.
 //   --media         `local`: the local R2 of `wrangler dev` (apps/web/.wrangler/state);
 //                   `r2`: the real bucket, through `wrangler r2 object put --remote` (needs a
 //                   Cloudflare login, so it only runs where one exists, never on a developer
-//                   machine in Milestone 1).
+//                   machine in Milestone 1);
+//                   `none`: records the keys and rows and uploads nothing, for a Worker without a
+//                   bucket that serves the photos as static assets from its build (decision 0011).
 //   --bucket        the R2 bucket name (default `dose-media`, as in apps/web/wrangler.jsonc).
 //   --fresh         drops and recreates the target database first. Refused unless it is on this machine.
 //   --allow-remote  seeds a database that is not on this machine (a preview or staging branch, never
@@ -79,8 +81,8 @@ const { values } = parseArgs({
 
 const { target, media, bucket, fresh, 'allow-remote': allowRemote } = values;
 if (target === undefined || target === '') throw new Error('--target <owner database URL> is required');
-const { local } = checkSeedTarget(target, { allowRemote, fresh });
-if (media !== 'local' && media !== 'r2') throw new Error('--media must be local or r2');
+const { local } = checkSeedTarget(target, { allowRemote, fresh, production: false });
+if (media !== 'local' && media !== 'r2' && media !== 'none') throw new Error('--media must be local, r2 or none');
 // R2's own naming rule; it also keeps the name safe on the Windows command line above.
 if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) throw new Error('--bucket is not a valid R2 bucket name');
 
@@ -88,12 +90,18 @@ if (fresh) await recreateDatabase(target);
 const applied = await migrate(target);
 console.log(`seed: ${String(applied.length)} migration(s) applied`);
 
-const store = wranglerMedia(bucket, media === 'local' ? ['--local', '--persist-to', LOCAL_PERSIST_DIR] : ['--remote']);
+/** For `--media none`: the web build writes the same bytes under the same keys (`pnpm --filter @dose/core run seed:media`). */
+const noUpload: MediaStore = { put: () => Promise.resolve() };
+
+const store =
+  media === 'none'
+    ? noUpload
+    : wranglerMedia(bucket, media === 'local' ? ['--local', '--persist-to', LOCAL_PERSIST_DIR] : ['--remote']);
 const db = createRequestDb(target);
 try {
   const result = await seedCatalogue(db, store, { localStaff: local });
   if (!local) console.log('seed: not a local database, so no local staff were written');
-  for (const image of result.images) console.log(`seed: stored ${image.key}`);
+  for (const image of result.images) console.log(`seed: ${media === 'none' ? 'recorded' : 'stored'} ${image.key}`);
   for (const [sku, outcome] of Object.entries(result.stock)) {
     console.log(`seed: ${sku} opening stock ${outcome === 'applied' ? 'received' : 'already received'}`);
   }
