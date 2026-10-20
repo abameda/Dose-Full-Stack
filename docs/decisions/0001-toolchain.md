@@ -25,7 +25,7 @@ Workspace globs are `packages/*`, `directions/*`, `apps/*`.
 
 Root scripts: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm check`, which chains them. Later tasks add a `boundaries` script and put it into `check`.
 
-CI (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`: install with a frozen lockfile, `pnpm check`, gitleaks, and `pnpm audit --prod --audit-level high`.
+CI (`.github/workflows/ci.yml`) runs on pull requests and on every push (so a branch is checked before its pull request exists): install with a frozen lockfile, `pnpm check`, gitleaks, and `pnpm audit --prod --audit-level high`.
 
 ## Consequences
 
