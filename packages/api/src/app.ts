@@ -1,6 +1,7 @@
 import type { Staff } from '@dose/contract';
 import type { Db, Tx } from '@dose/core/db';
 import { Hono } from 'hono';
+import { adminRoutes } from './admin-routes';
 import { storefrontRoutes } from './storefront-routes';
 import { webhookRoutes } from './webhook-routes';
 
@@ -19,7 +20,7 @@ export type ApiDeps = {
   db: () => Db;
   env: 'local' | 'test' | 'preview' | 'staging' | 'production';
   now: () => Date;
-  /** Accepted now, used by the admin routes (Task 11). */
+  /** Who is asking, for the admin routes: `createAccessVerifier` in every deployed environment. */
   verifyStaff: (req: Request) => Promise<Staff | null>;
   /** Keyed by the `:provider` segment of `/api/webhooks/:provider`. */
   webhookProviders: Record<string, WebhookProvider>;
@@ -46,6 +47,7 @@ export function createApp(deps: ApiDeps): Hono<ApiEnv> {
 
   app.route('/', storefrontRoutes(deps));
   app.route('/', webhookRoutes(deps));
+  app.route('/', adminRoutes(deps));
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((error, c) => {

@@ -27,6 +27,7 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | hono | 4.13.13 | HTTP app in `@dose/api`. Latest stable 4.x (published 2026-10-04); the 5.0.0 release candidates are not stable. |
 | @hono/node-server | 2.1.3 | Serves the Hono app on Node in `apps/node-control`. 2.1.4 and 2.1.5 were published less than two weeks before Task 10; 2.1.3 (2026-09-29) peers on `hono ^4`. |
 | tsx | 4.23.15 | Runs `apps/node-control/src/server.ts` directly (the workspace sources import extensionless, which Node alone cannot load). Published 2026-09-20. |
+| jose | 6.2.12 | Verifies Cloudflare Access tokens (`Cf-Access-Jwt-Assertion`) in `@dose/api`, on Workers and Node, with no dependencies of its own. Latest release (published 2026-09-05), more than two weeks before Task 11. |
 | Postgres (local and CI) | 18 (`postgres:18` image) | `docker-compose.yml` for local development (port 54329) and the CI service container. Neon runs the production branches; the version is confirmed when the Neon project is created. |
 
 TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` and `moduleResolution: Bundler` in `tsconfig.base.json`. Packages extend it. Source imports are extensionless.

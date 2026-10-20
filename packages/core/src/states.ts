@@ -5,16 +5,11 @@
  * the migration limits each column to the same sets (orders-schema.test.ts pins the match).
  */
 
-export const ORDER_STATES = ['pending', 'confirmed', 'cancelled'] as const;
-export type OrderState = (typeof ORDER_STATES)[number];
+import type { OrderState, PaymentState } from '@dose/contract';
 
-/** 'collected' arrives with Bosta (M3/M4). */
-export const PAYMENT_STATES = ['awaiting_collection', 'voided'] as const;
-export type PaymentState = (typeof PAYMENT_STATES)[number];
-
-/** Shipment states arrive in M3. */
-export const FULFILMENT_STATES = ['unfulfilled'] as const;
-export type FulfilmentState = (typeof FULFILMENT_STATES)[number];
+// The state sets live in @dose/contract so the admin can name them; they are re-exported here.
+export { FULFILMENT_STATES, ORDER_STATES, PAYMENT_STATES } from '@dose/contract';
+export type { FulfilmentState, OrderState, PaymentState } from '@dose/contract';
 
 /** Confirmed and cancelled are final in M1; a cancelled order never comes back. */
 export const ORDER_TRANSITIONS: Record<OrderState, readonly OrderState[]> = {

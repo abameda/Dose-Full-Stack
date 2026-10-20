@@ -12,7 +12,8 @@
   "dependencies": {
     "@dose/contract": "workspace:*",
     "@dose/core": "workspace:*",
-    "hono": "4.13.13"
+    "hono": "4.13.13",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@types/node": "24.19.2"

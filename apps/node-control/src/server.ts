@@ -28,7 +28,7 @@ const app = createApp({
   db: () => ({ ...pool, close: () => Promise.resolve() }),
   env: environment(),
   now: () => new Date(),
-  verifyStaff: () => Promise.resolve(null), // staff authentication arrives with the admin API (Task 11)
+  verifyStaff: () => Promise.resolve(null), // no staff sign-in here: Access sits in front of the Worker (createAccessVerifier, Task 13)
   webhookProviders: {},
 });
 

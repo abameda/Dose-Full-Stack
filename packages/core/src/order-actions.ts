@@ -1,3 +1,4 @@
+import { CANCEL_REASONS, CONFIRM_METHODS, MAX_NOTE_LENGTH, type CancelReason, type ConfirmMethod } from '@dose/contract';
 import { writeAudit } from './audit';
 import type { Db, Tx } from './db';
 import { ORDER_TRANSITIONS, PAYMENT_TRANSITIONS, type OrderState, type PaymentState } from './states';
@@ -14,21 +15,9 @@ import { releaseStock, sellReserved, type Actor } from './stock';
  * names the reservation.
  */
 
-export const CANCEL_REASONS = [
-  'customer_request',
-  'unreachable',
-  'duplicate',
-  'suspected_fraud',
-  'out_of_stock',
-  'confirmation_window_expired',
-  'other',
-] as const;
-/** Moves to `@dose/contract` with the admin API (Task 11). */
-export type CancelReason = (typeof CANCEL_REASONS)[number];
-
-export const CONFIRM_METHODS = ['whatsapp', 'phone'] as const;
-/** Moves to `@dose/contract` with the admin API (Task 11). */
-export type ConfirmMethod = (typeof CONFIRM_METHODS)[number];
+// The reasons, methods and note limit live in @dose/contract (the admin names them); re-exported here.
+export { CANCEL_REASONS, CONFIRM_METHODS, MAX_NOTE_LENGTH } from '@dose/contract';
+export type { CancelReason, ConfirmMethod } from '@dose/contract';
 
 export type ActionOutcome =
   | { ok: true; version: number }
@@ -53,7 +42,6 @@ export interface CancelCommand {
   note?: string;
 }
 
-export const MAX_NOTE_LENGTH = 1000;
 /** Orders the expiry job cancels in one call unless told otherwise. */
 export const DEFAULT_EXPIRY_LIMIT = 100;
 const EXPIRY_ACTOR: Actor = { type: 'system', id: 'expiry' };

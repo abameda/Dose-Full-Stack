@@ -122,9 +122,147 @@ export const bagQuoteSchema: z.ZodType<{ lang: Lang; lines: BagLine[]; governora
   governorate: z.exactOptional(z.string().min(1).max(MAX_ADDRESS_FIELD)),
 });
 
-// ── Staff (used by the admin API, Task 11) ───────────────────────────────────────────────────
+// ── Staff ────────────────────────────────────────────────────────────────────────────────────
 
 export const ROLES = ['owner', 'operations', 'marketing', 'accountant'] as const;
 export type Role = (typeof ROLES)[number];
 
 export type Staff = { id: string; email: string; name: string; role: Role };
+
+// ── Orders as the admin sees them ────────────────────────────────────────────────────────────
+// The state sets, reasons and methods live here so the admin can name them without importing
+// commerce code; `@dose/core` re-exports them and the migrations limit each column to the same set.
+
+export const ORDER_STATES = ['pending', 'confirmed', 'cancelled'] as const;
+export type OrderState = (typeof ORDER_STATES)[number];
+
+/** 'collected' arrives with Bosta (M3/M4). */
+export const PAYMENT_STATES = ['awaiting_collection', 'voided'] as const;
+export type PaymentState = (typeof PAYMENT_STATES)[number];
+
+/** Shipment states arrive in M3. */
+export const FULFILMENT_STATES = ['unfulfilled'] as const;
+export type FulfilmentState = (typeof FULFILMENT_STATES)[number];
+
+export const CANCEL_REASONS = [
+  'customer_request',
+  'unreachable',
+  'duplicate',
+  'suspected_fraud',
+  'out_of_stock',
+  'confirmation_window_expired',
+  'other',
+] as const;
+export type CancelReason = (typeof CANCEL_REASONS)[number];
+
+/** How staff reached the customer to confirm a cash-on-delivery order. */
+export const CONFIRM_METHODS = ['whatsapp', 'phone'] as const;
+export type ConfirmMethod = (typeof CONFIRM_METHODS)[number];
+
+/** The longest note staff may attach to a confirm or cancel (after trimming). */
+export const MAX_NOTE_LENGTH = 1000;
+
+export type ActorType = 'customer' | 'staff' | 'system';
+
+/** One row of an order list. Amounts are integer piastres; `createdAt` is ISO 8601. */
+export type OrderSummary = {
+  number: string;
+  createdAt: string;
+  customerName: string;
+  /** E.164, `+201XXXXXXXXX`. */
+  customerPhone: string;
+  governorate: string;
+  total: number;
+  orderState: OrderState;
+  paymentState: PaymentState;
+  fulfilmentState: FulfilmentState;
+  /** Send it back as `expectedVersion` to confirm or cancel. */
+  version: number;
+};
+
+/** One audit event of an order, as the timeline shows it. */
+export type TimelineEntry = {
+  at: string;
+  actorType: ActorType;
+  /** The customer's phone, the staff member's name, or the system job (e.g. `expiry`). */
+  actorLabel: string;
+  /** e.g. `order.placed`, `order.confirmed`, `order.cancelled`. */
+  action: string;
+  reason?: string;
+  note?: string;
+  /** How a confirm was made. */
+  method?: ConfirmMethod;
+};
+
+export type OrderLineView = {
+  sku: string;
+  nameAr: string;
+  nameEn: string;
+  unitPrice: number;
+  quantity: number;
+  lineDiscount: number;
+  lineTotal: number;
+};
+
+export type OrderDetail = OrderSummary & {
+  lang: Lang;
+  direction: string;
+  channel: 'web' | 'manual';
+  paymentMethod: 'cod';
+  address: { governorate: string; area: string; street: string; building: string; landmark?: string };
+  lines: OrderLineView[];
+  subtotal: number;
+  discountTotal: number;
+  deliveryFee: number;
+  /** Oldest first. */
+  timeline: TimelineEntry[];
+};
+
+/** `GET /api/admin/today`. */
+export type TodayView = {
+  toConfirm: { count: number; oldestWaitingMinutes: number | null; orders: OrderSummary[] };
+};
+
+/** One event of the whole audit log (`GET /api/admin/audit`). */
+export type AuditEntry = {
+  id: string;
+  at: string;
+  actorType: ActorType;
+  actorId: string | null;
+  actorLabel: string;
+  action: string;
+  entity: string | null;
+  entityId: string | null;
+  entityVersion: number | null;
+  reason: string | null;
+  data: Record<string, unknown>;
+};
+
+/** Newest first. Pass `nextCursor` back as `?cursor=` for the next page; null on the last page. */
+export type AuditPage = { events: AuditEntry[]; nextCursor: string | null };
+
+export type ConfirmOrderInput = { expectedVersion: number; method: ConfirmMethod; note?: string };
+export type CancelOrderInput = { expectedVersion: number; reason: CancelReason; note?: string };
+
+/** What confirm and cancel answer: 200, 409 (someone changed the order first), 422 or 404. */
+export type OrderActionResult =
+  | { ok: true; version: number }
+  | { ok: false; code: 'conflict'; current: { orderState: OrderState; version: number } }
+  | { ok: false; code: 'invalid'; fields: string[] }
+  | { ok: false; code: 'not_found' };
+
+const noteSchema = z.exactOptional(z.string().trim().max(MAX_NOTE_LENGTH));
+const expectedVersionSchema = z.number().int().min(1);
+
+export const confirmOrderInputSchema: z.ZodType<ConfirmOrderInput> = z.object({
+  expectedVersion: expectedVersionSchema,
+  method: z.enum(CONFIRM_METHODS),
+  note: noteSchema,
+});
+
+export const cancelOrderInputSchema: z.ZodType<CancelOrderInput> = z
+  .object({ expectedVersion: expectedVersionSchema, reason: z.enum(CANCEL_REASONS), note: noteSchema })
+  .refine((input) => input.reason !== 'other' || (input.note ?? '') !== '', {
+    message: 'a note is required when the reason is "other"',
+    path: ['note'],
+  });
