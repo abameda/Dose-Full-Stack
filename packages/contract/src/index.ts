@@ -128,6 +128,15 @@ export type Role = (typeof ROLES)[number];
 
 export type Staff = { id: string; email: string; name: string; role: Role };
 
+// Decision 0002 (M1 admin permissions). The API enforces them (`ADMIN_ROUTES` in @dose/api) and the
+// admin uses the same lists to show only the controls a role may use, so they are named once, here.
+/** Roles that may read orders and the Today queue. */
+export const ORDER_READER_ROLES = ['owner', 'operations', 'accountant'] as const satisfies readonly Role[];
+/** Roles that may confirm or cancel an order. */
+export const ORDER_ACTOR_ROLES = ['owner', 'operations'] as const satisfies readonly Role[];
+/** Roles that may read the audit log. */
+export const AUDIT_READER_ROLES = ['owner'] as const satisfies readonly Role[];
+
 // ── Orders as the admin sees them ────────────────────────────────────────────────────────────
 // The state sets, reasons and methods live here so the admin can name them without importing
 // commerce code; `@dose/core` re-exports them and the migrations limit each column to the same set.

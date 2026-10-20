@@ -1,0 +1,25 @@
+---
+// The admin: one React app (apps/admin) that handles every address under /admin itself (React
+// Router, basename "/admin"), so a single catch-all page serves it. The middleware
+// (src/middleware.ts) has already required a signed-in staff member and marked the response
+// private and not indexed by the time this runs; the API behind it checks each person's role.
+import { AdminApp } from '@dose/admin/AdminApp';
+import '@dose/ui/tokens.css';
+import '@dose/ui/components.css';
+import '@dose/admin/admin.css';
+
+export const prerender = false;
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>DÖSE admin</title>
+  </head>
+  <body class="dose-admin-body">
+    <AdminApp client:only="react" />
+  </body>
+</html>

@@ -37,6 +37,9 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | react, react-dom | 19.3.0 | The storefront islands (bag, add to bag, checkout form) in `@dose/ui`, `@dose/shop` and `apps/web`. Published 2026-09-09; 19.3.1 to 19.3.2 are less than two weeks old. About 66 KB gzipped on the page, the bulk of the 110 KB budget. |
 | @astrojs/react | 7.0.0 | Renders and hydrates the React islands in Astro 7. Published 2026-09-22; 7.0.1 (2026-10-06) is at the edge of the age gate. |
 | @types/react, @types/react-dom | 19.3.0 | Types for the islands (dev dependencies). |
+| react-router | 8.4.0 | Routing in the admin SPA (`apps/admin`, `basename="/admin"`). Published 2026-09-15; 8.5.0 (2026-10-19) is less than two weeks old and the pnpm release-age gate refuses it. |
+| @testing-library/react, @testing-library/dom, @testing-library/user-event, @testing-library/jest-dom | 16.3.3, 10.4.2, 14.6.8, 7.0.1 | Component tests of the admin (`apps/admin/test`), dev dependencies of `@dose/admin`. |
+| jsdom | 30.1.3 | The browser environment of the admin's component tests (vitest `environment: 'jsdom'`). |
 | @axe-core/playwright | 4.13.0 | Accessibility checks in `e2e/a11y.spec.ts` (root dev dependency). Published 2026-08-11; 4.14.0 is newer than two weeks. |
 | pg, @types/pg (root dev dependencies) | 8.23.1 | The e2e specs change a live price through the owner role (`e2e/support/db.ts`); same versions as `@dose/core`. |
 | @lhci/cli | 0.15.1 | Lighthouse CI (`pnpm lhci`, `lighthouserc.cjs`): the speed and accessibility gate for the Direction 0 product page, three mobile-emulation runs per URL, median asserted. Latest release (published 2025-06-25); it bundles its own Lighthouse and uses the Chrome installed on the machine (the GitHub Ubuntu runner has one). Root dev dependency. |

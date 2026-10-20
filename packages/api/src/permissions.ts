@@ -1,13 +1,8 @@
-import { ROLES, type Role, type Staff } from '@dose/contract';
+import { AUDIT_READER_ROLES, ORDER_ACTOR_ROLES, ORDER_READER_ROLES, ROLES, type Role, type Staff } from '@dose/contract';
 import type { Db } from '@dose/core/db';
 import type { MiddlewareHandler } from 'hono';
 
 export type AdminRoute = { method: 'GET' | 'POST'; path: string; allow: readonly Role[] };
-
-/** Decision 0002: operations and the accountant read orders as well as the owner. */
-const ORDER_READERS = ['owner', 'operations', 'accountant'] as const;
-/** Decision 0002: only the owner and operations confirm or cancel. */
-const ORDER_ACTORS = ['owner', 'operations'] as const;
 
 /**
  * Every admin route and the roles that may use it: the single source of truth. `adminGuard`
@@ -16,12 +11,12 @@ const ORDER_ACTORS = ['owner', 'operations'] as const;
  */
 export const ADMIN_ROUTES = [
   { method: 'GET', path: '/api/admin/me', allow: ROLES },
-  { method: 'GET', path: '/api/admin/today', allow: ORDER_READERS },
-  { method: 'GET', path: '/api/admin/orders', allow: ORDER_READERS },
-  { method: 'GET', path: '/api/admin/orders/:number', allow: ORDER_READERS },
-  { method: 'POST', path: '/api/admin/orders/:number/confirm', allow: ORDER_ACTORS },
-  { method: 'POST', path: '/api/admin/orders/:number/cancel', allow: ORDER_ACTORS },
-  { method: 'GET', path: '/api/admin/audit', allow: ['owner'] },
+  { method: 'GET', path: '/api/admin/today', allow: ORDER_READER_ROLES },
+  { method: 'GET', path: '/api/admin/orders', allow: ORDER_READER_ROLES },
+  { method: 'GET', path: '/api/admin/orders/:number', allow: ORDER_READER_ROLES },
+  { method: 'POST', path: '/api/admin/orders/:number/confirm', allow: ORDER_ACTOR_ROLES },
+  { method: 'POST', path: '/api/admin/orders/:number/cancel', allow: ORDER_ACTOR_ROLES },
+  { method: 'GET', path: '/api/admin/audit', allow: AUDIT_READER_ROLES },
 ] as const satisfies readonly AdminRoute[];
 
 /** Hono's type parameter for the admin routes: the guard puts the signed-in staff member on the context. */
