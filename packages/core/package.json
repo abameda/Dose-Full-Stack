@@ -12,7 +12,10 @@
     "./states": "./src/states.ts",
     "./audit": "./src/audit.ts",
     "./pricing": "./src/pricing.ts",
-    "./governorates": "./src/governorates.ts"
+    "./governorates": "./src/governorates.ts",
+    "./phone": "./src/phone.ts",
+    "./address": "./src/address.ts",
+    "./checkout": "./src/checkout.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
