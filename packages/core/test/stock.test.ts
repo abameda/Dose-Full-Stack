@@ -198,8 +198,8 @@ describe('the database enforces the rules without the helpers', () => {
     ]);
   });
 
-  test('the app role can read, insert and update the new tables and cannot delete from them', async () => {
-    const { owner } = await withTestDb();
+  test('the app role can read, insert and update the new tables, only read and add to the movement ledger, and delete nothing', async () => {
+    const { owner, app } = await withTestDb();
     const tables = ['products', 'product_images', 'variants', 'stock_levels', 'stock_movements'];
     const rows = await owner.query<{ t: string; sel: boolean; ins: boolean; upd: boolean; del: boolean; trunc: boolean }>(
       `select t,
@@ -212,7 +212,12 @@ describe('the database enforces the rules without the helpers', () => {
       [tables],
     );
     expect(rows.map((r) => r.t)).toEqual(tables);
-    for (const r of rows) expect(r).toMatchObject({ sel: true, ins: true, upd: true, del: false, trunc: false });
+    for (const r of rows) {
+      // The movement ledger is append-only for the app role (rule 5, decision 0003).
+      const upd = r.t !== 'stock_movements';
+      expect(r).toMatchObject({ sel: true, ins: true, upd, del: false, trunc: false });
+    }
+    await expect(app.query(`update stock_movements set on_hand_delta = on_hand_delta`)).rejects.toThrow(/permission denied/);
     const [seq] = await owner.query<{ ok: boolean }>(
       `select has_sequence_privilege('dose_app', 'stock_movements_id_seq', 'USAGE') as ok`,
     );

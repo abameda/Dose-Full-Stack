@@ -37,6 +37,8 @@ create table outbox (
 -- Workers look only at messages not yet delivered.
 create index outbox_open_idx on outbox (id) where status <> 'done';
 
--- Application role: the default grant of decision 0003, never DELETE.
-grant select, insert, update on webhook_receipts, outbox to dose_app;
+-- Application role: the default grant of decision 0003, never DELETE. Webhook receipts are an
+-- append-only record of what each provider sent (rule 8), so the app role may only read and add to them.
+grant select, insert, update on outbox to dose_app;
+grant select, insert on webhook_receipts to dose_app;
 grant usage on sequence webhook_receipts_id_seq, outbox_id_seq to dose_app;

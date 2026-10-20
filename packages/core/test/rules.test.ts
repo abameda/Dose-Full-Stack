@@ -70,6 +70,25 @@ function rulesOf(violations: { rule: number }[]): number[] {
   return [...new Set(violations.map((v) => v.rule))].sort((x, y) => x - y);
 }
 
+/**
+ * Gives the pending order's single line a discount of `amount` piastres, as M2's pricing would.
+ * `once` keeps the subtotal gross and lowers the total by the discount; `twice` also nets the
+ * discount out of the subtotal, so the total is lowered by it twice (the customer is undercharged).
+ */
+async function discountPendingLine(owner: Db, orderNumber: string, amount: number, times: 'once' | 'twice'): Promise<void> {
+  const charged = times === 'once' ? amount : 2 * amount;
+  const subtotalCut = times === 'once' ? 0 : amount;
+  await owner.query(
+    `update order_lines set line_discount = $2, line_total = line_total - $2
+      where order_id = (select id from orders where number = $1)`,
+    [orderNumber, amount],
+  );
+  await owner.query(
+    `update orders set discount_total = $2, subtotal = subtotal - $3, total = total - $4 where number = $1`,
+    [orderNumber, amount, subtotalCut, charged],
+  );
+}
+
 describe('checkRules on a database that follows the rules', () => {
   test('a freshly migrated database has no violations', async () => {
     const { owner } = await withTestDb();
@@ -78,6 +97,12 @@ describe('checkRules on a database that follows the rules', () => {
 
   test('a database with orders placed, confirmed and cancelled through the code has no violations', async () => {
     const { owner } = await arrange();
+    expect(await checkRules(owner)).toEqual([]);
+  });
+
+  test('a discounted order with a gross subtotal and the discount subtracted once has no violations', async () => {
+    const { owner, orders } = await arrange();
+    await discountPendingLine(owner, orders.pending, 100, 'once');
     expect(await checkRules(owner)).toEqual([]);
   });
 });
@@ -99,6 +124,12 @@ const corruptions: Corruption[] = [
       owner
         .query(`update orders set subtotal = subtotal + 100, total = total + 100 where number = $1`, [orders.pending])
         .then(() => undefined),
+    rules: [1],
+    mentions: ({ orders }) => orders.pending,
+  },
+  {
+    name: 'rule 1: a discounted order whose subtotal is net of the discount, so the discount is subtracted twice',
+    corrupt: ({ owner, orders }) => discountPendingLine(owner, orders.pending, 100, 'twice'),
     rules: [1],
     mentions: ({ orders }) => orders.pending,
   },
@@ -237,6 +268,24 @@ const corruptions: Corruption[] = [
     mentions: ({ orders }) => orders.pending,
   },
   {
+    name: 'rule 5: UPDATE on the stock movement ledger granted to dose_app',
+    corrupt: ({ owner }) => owner.query(`grant update on stock_movements to dose_app`).then(() => undefined),
+    rules: [5],
+    mentions: () => 'stock_movements',
+  },
+  {
+    name: 'rule 5: UPDATE on one column of the stock movement ledger granted to dose_app',
+    corrupt: ({ owner }) => owner.query(`grant update (on_hand_delta) on stock_movements to dose_app`).then(() => undefined),
+    rules: [5],
+    mentions: () => 'stock_movements',
+  },
+  {
+    name: 'rule 8: UPDATE on webhook receipts granted to dose_app',
+    corrupt: ({ owner }) => owner.query(`grant update on webhook_receipts to dose_app`).then(() => undefined),
+    rules: [8],
+    mentions: () => 'webhook_receipts',
+  },
+  {
     name: 'rule 8: the unique constraint on webhook receipts removed',
     corrupt: ({ owner }) => dropConstraint(owner, 'webhook_receipts', 'u', 'provider, event_id'),
     rules: [8],
@@ -265,6 +314,12 @@ const corruptions: Corruption[] = [
     corrupt: ({ owner }) => owner.query(`grant truncate on audit_events to dose_app`).then(() => undefined),
     rules: [12],
     mentions: () => 'TRUNCATE',
+  },
+  {
+    name: 'rule 12: UPDATE on one column of audit_events granted to dose_app',
+    corrupt: ({ owner }) => owner.query(`grant update (reason) on audit_events to dose_app`).then(() => undefined),
+    rules: [12],
+    mentions: () => 'UPDATE',
   },
   {
     name: 'rule 12: DELETE on audit_events granted to everyone',

@@ -24,7 +24,11 @@ describe('priceBag (rule 1: totals add up)', () => {
         (lines, deliveryFee) => {
           const r = priceBag(lines, deliveryFee);
           expect(r.total).toBe(r.subtotal - r.discountTotal + r.deliveryFee);
-          expect(r.subtotal).toBe(sum(r.lines.map((l) => l.lineTotal)));
+          // The subtotal is gross and the discount is the sum of the line discounts, so the total
+          // is what the lines charge plus delivery: no discount is subtracted twice.
+          expect(r.subtotal).toBe(sum(r.lines.map((l) => l.unitPrice * l.quantity)));
+          expect(r.discountTotal).toBe(sum(r.lines.map((l) => l.lineDiscount)));
+          expect(r.total).toBe(sum(r.lines.map((l) => l.lineTotal)) + r.deliveryFee);
           expect(r.discountTotal).toBeLessThanOrEqual(r.subtotal);
           expect(r.deliveryFee).toBe(deliveryFee);
           for (const n of [r.total, r.subtotal, r.discountTotal, ...r.lines.map((l) => l.lineTotal)]) {

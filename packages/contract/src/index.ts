@@ -41,6 +41,7 @@ export type BagLine = { sku: string; quantity: number };
 /** A bag priced at today's prices. All amounts are integer piastres. */
 export type BagView = {
   lines: { sku: string; name: string; unitPrice: number; quantity: number; lineTotal: number }[];
+  /** The gross sum of unit price x quantity, before any discount. */
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -219,6 +220,7 @@ export type OrderDetail = OrderSummary & {
   paymentMethod: 'cod';
   address: { governorate: string; area: string; street: string; building: string; landmark?: string };
   lines: OrderLineView[];
+  /** The gross sum of unit price x quantity, before discounts; `total = subtotal - discountTotal + deliveryFee`. */
   subtotal: number;
   discountTotal: number;
   deliveryFee: number;

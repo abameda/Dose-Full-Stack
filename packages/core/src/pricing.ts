@@ -34,8 +34,10 @@ function money(n: number, what: string): number {
 }
 
 /**
- * Prices a bag in integer piastres: each line is unit price x quantity less its discount, the
- * subtotal is the sum of the lines, and `total = subtotal - discountTotal + deliveryFee` (rule 1).
+ * Prices a bag in integer piastres: each line is unit price x quantity less its discount; the
+ * subtotal is the gross sum of unit price x quantity (before discounts), `discountTotal` the sum of
+ * the line discounts, and `total = subtotal - discountTotal + deliveryFee` (rule 1), which equals
+ * the sum of the line totals plus delivery: each discount is subtracted once.
  * Milestone 1 has no discounts, so every `lineDiscount` is 0; the discount fields exist so the
  * order tables and totals do not change when M2 adds them.
  *
@@ -59,7 +61,7 @@ export function priceBag(lines: Omit<PricedLine, 'lineDiscount' | 'lineTotal'>[]
   });
 
   const subtotal = money(
-    priced.reduce((sum, line) => sum + line.lineTotal, 0),
+    priced.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
     'Subtotal',
   );
   const discountTotal = priced.reduce((sum, line) => sum + line.lineDiscount, 0);

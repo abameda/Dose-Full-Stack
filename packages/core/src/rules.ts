@@ -15,19 +15,21 @@ interface Finding {
 }
 
 /**
- * Rule 1: an order's figures add up. `total = subtotal - discount_total + delivery_fee`, and the
- * order's subtotal and discount are the sum of its lines (an order with no lines has none).
+ * Rule 1: an order's figures add up. `total = subtotal - discount_total + delivery_fee`; the
+ * subtotal is the gross sum of its lines (unit price x quantity, before discounts) and the discount
+ * is the sum of the line discounts, so each discount is subtracted once (an order with no lines has
+ * neither).
  */
 const RULE_1 = `
-  select format('order %s: subtotal %s, discount %s, delivery %s, total %s, but its lines add up to %s and discount %s',
+  select format('order %s: subtotal %s, discount %s, delivery %s, total %s, but its lines add up to %s before discount %s',
                 o.number, o.subtotal, o.discount_total, o.delivery_fee, o.total,
-                coalesce(sum(l.line_total), 0), coalesce(sum(l.line_discount), 0)) as detail,
+                coalesce(sum(l.unit_price::bigint * l.quantity), 0), coalesce(sum(l.line_discount), 0)) as detail,
          o.number as ref
     from orders o
     left join order_lines l on l.order_id = o.id
    group by o.id
   having o.total <> o.subtotal - o.discount_total + o.delivery_fee
-      or o.subtotal <> coalesce(sum(l.line_total), 0)
+      or o.subtotal <> coalesce(sum(l.unit_price::bigint * l.quantity), 0)
       or o.discount_total <> coalesce(sum(l.line_discount), 0)
    order by o.created_at, o.number`;
 
@@ -137,11 +139,18 @@ const UNIQUE_INDEX_MISSING = `
                     join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
                    order by k.position) = $2::text[])`;
 
-/** Rule 12: the application role holds none of UPDATE, DELETE and TRUNCATE on the audit log (directly or through PUBLIC). */
-const RULE_12 = `
-  select format('dose_app can %s audit_events', privilege) as detail, privilege as ref
+/**
+ * An append-only table: the application role holds none of UPDATE (on the table or any column),
+ * DELETE and TRUNCATE on the public table `$1`, directly or through PUBLIC (decision 0003). Used for
+ * the stock movement ledger (rule 5), webhook receipts (rule 8) and the audit log (rule 12).
+ */
+const APP_ROLE_CAN_REWRITE = `
+  select format('dose_app can %s %s', privilege, $1::text) as detail, $1::text as ref
     from unnest(array['UPDATE', 'DELETE', 'TRUNCATE']) as p(privilege)
-   where has_table_privilege('dose_app', 'public.audit_events', privilege)`;
+   where case privilege
+           when 'UPDATE' then has_any_column_privilege('dose_app', ('public.' || $1)::regclass, privilege)
+           else has_table_privilege('dose_app', ('public.' || $1)::regclass, privilege)
+         end`;
 
 async function violationsOf(db: Db, rule: number, sql: string, params?: unknown[]): Promise<Violation[]> {
   const rows = await db.query<Finding>(sql, params);
@@ -149,10 +158,11 @@ async function violationsOf(db: Db, rule: number, sql: string, params?: unknown[
 }
 
 /**
- * Checks every commerce rule that exists so far against the data, one query per rule, and returns
- * what is broken (an empty list means every rule holds), ordered by rule number. Read-only.
+ * Checks every commerce rule that exists so far against the data, one query per rule (rules 5 and
+ * 8 add a second, for their append-only table), and returns what is broken (an empty list means
+ * every rule holds), ordered by rule number. Read-only.
  *
- * Connect as the owner role (`dose_owner`): rule 12 reads the privileges of `dose_app`, and the
+ * Connect as the owner role (`dose_owner`): rules 5, 8 and 12 read the privileges of `dose_app`, and the
  * checker must see every row. A broken rule never throws; only a failing query (the database is
  * unreachable, or `dose_app` does not exist) does. Rules 2, 7, 9 and 10 arrive with the milestones
  * that introduce what they govern.
@@ -163,17 +173,19 @@ export async function checkRules(db: Db): Promise<Violation[]> {
     ...(await violationsOf(db, 3, RULE_3)),
     ...(await violationsOf(db, 4, RULE_4)),
     ...(await violationsOf(db, 5, RULE_5)),
+    ...(await violationsOf(db, 5, APP_ROLE_CAN_REWRITE, ['stock_movements'])),
     ...(await violationsOf(db, 6, RULE_6)),
     ...(await violationsOf(db, 8, UNIQUE_INDEX_MISSING, [
       'webhook_receipts',
       ['provider', 'event_id'],
       'webhook_receipts has no unique constraint on (provider, event_id), so a redelivered event would apply twice',
     ])),
+    ...(await violationsOf(db, 8, APP_ROLE_CAN_REWRITE, ['webhook_receipts'])),
     ...(await violationsOf(db, 11, UNIQUE_INDEX_MISSING, [
       'outbox',
       ['dedupe_key'],
       'outbox has no unique constraint on (dedupe_key), so a message could be enqueued twice',
     ])),
-    ...(await violationsOf(db, 12, RULE_12)),
+    ...(await violationsOf(db, 12, APP_ROLE_CAN_REWRITE, ['audit_events'])),
   ];
 }

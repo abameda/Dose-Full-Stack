@@ -132,7 +132,7 @@ test('the same event id from two providers is two events', async () => {
   expect(await receipts(owner)).toHaveLength(2);
 });
 
-test('the app role can record and read webhook receipts but never delete them', async () => {
+test('the app role can record and read webhook receipts but never change or delete them', async () => {
   const { app, owner } = await arrange();
   const [p] = await owner.query<Record<string, boolean>>(
     `select has_table_privilege('dose_app', 'webhook_receipts', 'SELECT') as sel,
@@ -142,6 +142,7 @@ test('the app role can record and read webhook receipts but never delete them', 
             has_table_privilege('dose_app', 'webhook_receipts', 'TRUNCATE') as trunc,
             has_sequence_privilege('dose_app', 'webhook_receipts_id_seq', 'USAGE') as seq`,
   );
-  expect(p).toEqual({ sel: true, ins: true, upd: true, del: false, trunc: false, seq: true });
+  expect(p).toEqual({ sel: true, ins: true, upd: false, del: false, trunc: false, seq: true });
+  await expect(app.query(`update webhook_receipts set payload = '{}'::jsonb`)).rejects.toThrow(/permission denied/);
   await expect(app.query(`delete from webhook_receipts`)).rejects.toThrow(/permission denied/);
 });
