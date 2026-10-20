@@ -81,7 +81,7 @@ create table stock_movements (
 );
 create index stock_movements_variant_idx on stock_movements (variant_id);
 
--- Application role: the default grant of decision 0003 on every table above, never DELETE. The
+-- Application role: the default grant of decision 0007 on every table above, never DELETE. The
 -- movement ledger is append-only (rule 5), so the app role may only read and add to it.
 grant select, insert, update on products, product_images, variants, stock_levels to dose_app;
 grant select, insert on stock_movements to dose_app;

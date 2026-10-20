@@ -124,7 +124,7 @@ apps/web/                               Astro app, wrangler.jsonc, routes, API m
 apps/node-control/                      Node server for the PoC control + Dockerfile + fly.toml
 poc/concurrency.ts                      deployed-target concurrency runner
 e2e/                                    Playwright specs
-docs/decisions/                         0001 toolchain · 0002 defaults · 0003 beliefs · 0004 runtime · 0005 storefront
+docs/decisions/                         0001 toolchain · 0002 defaults · 0003 beliefs · 0004 runtime · 0005 storefront · 0006 environments · 0007 app-role privileges
 ```
 
 ---
@@ -265,7 +265,7 @@ test('a failed transaction leaves nothing behind', async () => {
   - `stock_levels(variant_id pk fk, on_hand int not null default 0, reserved int not null default 0, check (reserved >= 0 and reserved <= on_hand))`
   - `stock_movements(id bigserial pk, variant_id fk, reason text check in ('received','reserved','released','sold','returned','adjusted'), on_hand_delta int, reserved_delta int, source_key text unique not null, actor_type text, actor_id text, at timestamptz default now())`
   - Movement deltas, fixed: received `(+q, 0)`, reserved `(0, +q)`, released `(0, −q)`, sold `(−q, −q)`, returned `(+q, 0)`, adjusted `(±q, 0)`.
-  - Grants to `dose_app`: the default `SELECT, INSERT, UPDATE` on the other tables, but only `SELECT, INSERT` on `stock_movements` (append-only ledger, rule 5; decision 0003, corrected after the whole-branch review).
+  - Grants to `dose_app`: the default `SELECT, INSERT, UPDATE` on the other tables, but only `SELECT, INSERT` on `stock_movements` (append-only ledger, rule 5; decision 0007, corrected after the whole-branch review).
 - Produces:
   ```ts
   type Actor = { type: 'customer' | 'staff' | 'system'; id: string };
@@ -483,7 +483,7 @@ Tag it `@slow`; it runs in CI on every change.
 - Create: `packages/core/migrations/0004_webhooks_outbox.sql`, `packages/core/src/webhooks.ts`, `packages/core/src/outbox.ts`, `packages/core/test/webhooks.test.ts`, `packages/core/test/outbox.test.ts`
 
 **Interfaces:**
-- Grants to `dose_app`: only `SELECT, INSERT` on `webhook_receipts` (append-only, rule 8; decision 0003, corrected after the whole-branch review); the default `SELECT, INSERT, UPDATE` on `outbox`.
+- Grants to `dose_app`: only `SELECT, INSERT` on `webhook_receipts` (append-only, rule 8; decision 0007, corrected after the whole-branch review); the default `SELECT, INSERT, UPDATE` on `outbox`.
 - Schema: `webhook_receipts(id bigserial pk, provider text, event_id text, received_at timestamptz default now(), payload jsonb, unique (provider, event_id))`; `outbox(id bigserial pk, kind text, dedupe_key text unique, payload jsonb, status text check in ('pending','claimed','done'), attempts int default 0, claimed_until timestamptz null, provider_ref text null, created_at, done_at null)`.
 - Produces:
   ```ts

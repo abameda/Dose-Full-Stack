@@ -113,7 +113,7 @@ create table reservations (
 create index reservations_order_idx on reservations (order_id);
 create index reservations_held_expiry_idx on reservations (expires_at) where status = 'held';
 
--- Application role: the default grant of decision 0003, never DELETE.
+-- Application role: the default grant of decision 0007, never DELETE.
 grant select, insert, update on
   governorate_delivery, settings, customers, orders, order_lines, payments, reservations
   to dose_app;

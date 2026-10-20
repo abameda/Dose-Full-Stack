@@ -213,7 +213,7 @@ describe('the database enforces the rules without the helpers', () => {
     );
     expect(rows.map((r) => r.t)).toEqual(tables);
     for (const r of rows) {
-      // The movement ledger is append-only for the app role (rule 5, decision 0003).
+      // The movement ledger is append-only for the app role (rule 5, decision 0007).
       const upd = r.t !== 'stock_movements';
       expect(r).toMatchObject({ sel: true, ins: true, upd, del: false, trunc: false });
     }

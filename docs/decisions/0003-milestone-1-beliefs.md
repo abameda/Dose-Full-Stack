@@ -3,9 +3,9 @@
 - **Status:** open (each belief is closed by the task named below; Task 20 closes the record)
 - **Date:** 2026-10-20
 
-> Numbering: `0003-app-role-privileges.md` was written under the same number during Task 3, before
-> this record existed. The Milestone 1 plan names this file `0003-milestone-1-beliefs.md`, and later
-> tasks update it by that name, so both keep 0003.
+> Numbering: the app-role privileges record was first written as `0003-app-role-privileges.md`
+> during Task 3, before this record existed. The plan names this file `0003-milestone-1-beliefs.md`
+> and reserves 0003-0006, so that record is now `0007-app-role-privileges.md`.
 
 ## Context
 

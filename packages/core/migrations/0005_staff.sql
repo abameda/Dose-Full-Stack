@@ -16,5 +16,5 @@ create table staff (
   created_at timestamptz not null default now()
 );
 
--- Application role: the default grant of decision 0003, never DELETE.
+-- Application role: the default grant of decision 0007, never DELETE.
 grant select, insert, update on staff to dose_app;

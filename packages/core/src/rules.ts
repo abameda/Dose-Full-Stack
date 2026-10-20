@@ -141,7 +141,7 @@ const UNIQUE_INDEX_MISSING = `
 
 /**
  * An append-only table: the application role holds none of UPDATE (on the table or any column),
- * DELETE and TRUNCATE on the public table `$1`, directly or through PUBLIC (decision 0003). Used for
+ * DELETE and TRUNCATE on the public table `$1`, directly or through PUBLIC (decision 0007). Used for
  * the stock movement ledger (rule 5), webhook receipts (rule 8) and the audit log (rule 12).
  */
 const APP_ROLE_CAN_REWRITE = `
