@@ -203,6 +203,22 @@ test.describe('the studio, not signed in', () => {
     }
   });
 
+  test('an encoded or oddly written studio path is refused the same way', async ({ request }) => {
+    for (const path of [
+      '/%73tudio/en/products/paradise',
+      '/%53tudio/en/products/paradise',
+      '/%2573tudio/en/products/paradise',
+      '/studio%2Fen/products/paradise',
+      '/./studio/en/products/paradise',
+    ]) {
+      const response = await request.get(path);
+      expect(response.status(), path).toBe(401);
+      expect(response.headers()['cache-control'], path).toBe(PRIVATE['cache-control']);
+      expect(response.headers()['x-robots-tag'], path).toBe(PRIVATE['x-robots-tag']);
+      expect(await response.text(), path).not.toMatch(/paradise|blanc/i);
+    }
+  });
+
   test('a browser is shown the refusal, not the page', async ({ page }) => {
     const response = await page.goto('/studio/en/products/paradise');
     expect(response?.status()).toBe(401);
