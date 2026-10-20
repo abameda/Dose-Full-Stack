@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { placeCodOrder, type CheckoutCommand } from '../src/checkout';
 import { createPoolDb, type Db } from '../src/db';
+import { checkRules } from '../src/rules';
 import { getStock } from '../src/stock';
 import { makeProduct, makeVariant, type VariantFixture } from './factories';
 import { withTestDb, type TestDb } from './harness';
@@ -65,16 +66,10 @@ describe('@slow rule 3: 200 simultaneous checkouts for 10 units', () => {
       expect(outcomes.filter((o) => o.ok)).toHaveLength(UNITS);
       expect(outcomes.filter((o) => !o.ok && o.code === 'out_of_stock')).toHaveLength(CHECKOUTS - UNITS);
       expect(await countOrders(variant)).toBe(UNITS);
-      // Until checkRules exists (Task 9): the counters are exactly the ten held units, and they
-      // equal the sum of the variant's movements.
       expect(await getStock(db.owner, variant.id)).toEqual({ onHand: UNITS, reserved: UNITS, available: 0 });
-      expect(
-        await db.owner.query(
-          `select sum(on_hand_delta)::int as on_hand, sum(reserved_delta)::int as reserved
-             from stock_movements where variant_id = $1`,
-          [variant.id],
-        ),
-      ).toEqual([{ on_hand: UNITS, reserved: UNITS }]);
+      // Every rule still holds after the stampede: counters equal their movements, reservations
+      // match the counters, totals add up, and each order's version matches its audit events.
+      expect(await checkRules(db.owner)).toEqual([]);
     },
     60_000,
   );

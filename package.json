@@ -10,6 +10,7 @@
     "typecheck": "pnpm -r --if-present run typecheck && tsc -p test/boundaries/tsconfig.json",
     "lint": "eslint .",
     "boundaries": "node scripts/boundaries.mjs",
+    "rules:check": "pnpm --filter @dose/core run rules:check",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test"
   },
