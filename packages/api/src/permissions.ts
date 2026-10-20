@@ -43,9 +43,22 @@ export function adminRouteFor(method: string, path: string): AdminRoute | undefi
 }
 
 /**
+ * Whether the request says its body is JSON. A cross-site page can send a POST without a CORS
+ * preflight only as a "simple" request (text/plain, a form encoding, or no type at all), and the
+ * browser still attaches the Access cookie. Requiring `application/json` forces a preflight, which
+ * the admin API never answers, so such a request is refused before any handler reads its body.
+ */
+export function isJsonRequest(req: Request): boolean {
+  const type = req.headers.get('content-type');
+  return type !== null && type.split(';')[0]?.trim().toLowerCase() === 'application/json';
+}
+
+/**
  * Guards everything under `/api/admin/`: no staff is 401; a path or method not in ADMIN_ROUTES is
  * 404 (after sign-in, so a stranger learns nothing about which routes exist); a role the route
- * does not allow is 403. Every response, refusals and errors included, is private and not indexed.
+ * does not allow is 403; a POST whose body is not declared `application/json` is 415 (the CSRF
+ * defence, see `isJsonRequest`). Every response, refusals and errors included, is private and
+ * not indexed.
  */
 export function adminGuard(verifyStaff: (req: Request) => Promise<Staff | null>): MiddlewareHandler<AdminEnv> {
   const setPrivate = (c: { header(name: string, value: string): void }) => {
@@ -59,6 +72,7 @@ export function adminGuard(verifyStaff: (req: Request) => Promise<Staff | null>)
     const route = adminRouteFor(c.req.method, c.req.path);
     if (route === undefined) return c.json({ error: 'not_found' }, 404);
     if (!route.allow.includes(staff.role)) return c.json({ error: 'forbidden' }, 403);
+    if (route.method === 'POST' && !isJsonRequest(c.req.raw)) return c.json({ error: 'unsupported_media_type' }, 415);
     c.set('staff', staff);
     await next();
     // A response built after an error (onError) is a new response: mark it too.

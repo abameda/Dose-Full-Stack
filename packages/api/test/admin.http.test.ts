@@ -195,6 +195,39 @@ test('malformed confirm and cancel bodies are 422 naming the fields; an unknown 
   expect(unknown.body).toEqual({ ok: false, code: 'not_found' });
 });
 
+test('a confirm or cancel POST not sent as application/json is 415 and changes nothing (CSRF)', async () => {
+  const { app, get, placeOrder } = await arrange();
+  const number = await placeOrder();
+  const confirmBody = JSON.stringify({ expectedVersion: 1, method: 'whatsapp' });
+  const cancelBody = JSON.stringify({ expectedVersion: 1, reason: 'duplicate' });
+
+  // What a cross-site page can send without a CORS preflight: text/plain (a no-cors fetch or a
+  // <form enctype="text/plain"> crafting JSON), the two form encodings, or no type at all.
+  for (const type of ['text/plain', 'text/plain;charset=UTF-8', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', undefined]) {
+    for (const [action, body] of [['confirm', confirmBody], ['cancel', cancelBody]] as const) {
+      const headers: Record<string, string> = { 'X-Dev-Staff-Email': OPS_EMAIL };
+      if (type !== undefined) headers['content-type'] = type;
+      const res = await app.request(new Request(`http://dose.test/api/admin/orders/${number}/${action}`, { method: 'POST', headers, body }));
+      expect(res.status, `${action} as ${type ?? 'no content type'}`).toBe(415);
+      expect(res.headers.get('cache-control')).toBe('private, no-store');
+    }
+  }
+
+  const unchanged = (await get<OrderDetail>(`/api/admin/orders/${number}`)).body;
+  expect(unchanged).toMatchObject({ orderState: 'pending', paymentState: 'awaiting_collection', version: 1 });
+  expect(unchanged.timeline.map((e) => e.action)).toEqual(['order.placed']);
+
+  // JSON with parameters, in any case, is still JSON.
+  const res = await app.request(
+    new Request(`http://dose.test/api/admin/orders/${number}/confirm`, {
+      method: 'POST',
+      headers: { 'X-Dev-Staff-Email': OPS_EMAIL, 'content-type': 'Application/JSON; charset=utf-8' },
+      body: confirmBody,
+    }),
+  );
+  expect(res.status).toBe(200);
+});
+
 test('GET /api/admin/orders/:number of an unknown order is 404', async () => {
   const { get } = await arrange();
   expect((await get('/api/admin/orders/D99999')).res.status).toBe(404);
