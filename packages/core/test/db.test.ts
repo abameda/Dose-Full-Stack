@@ -34,7 +34,7 @@ test('a failed transaction leaves nothing behind', async () => {
 });
 
 describe('the migration', () => {
-  test('records itself and leaves the migration history out of the app role reach', async () => {
+  test('records itself and keeps migration history owner-only (decision 0003: the one exemption from the app role grants)', async () => {
     const { app, owner } = await withTestDb();
     expect(await owner.query<{ name: string }>(`select name from schema_migrations order by name`)).toEqual([
       { name: '0001_roles_and_audit.sql' },

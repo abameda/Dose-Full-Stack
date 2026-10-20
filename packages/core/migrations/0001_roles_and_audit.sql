@@ -20,7 +20,9 @@ $$;
 
 grant usage on schema public to dose_app;
 
--- Applied-migration history. Only the owner role reads or writes it.
+-- Applied-migration history. Deliberately NOT granted to dose_app: it is the one table a
+-- migration creates that the app role gets no access to, because a compromised app must not be
+-- able to read or rewrite migration history (docs/decisions/0003-app-role-privileges.md).
 create table schema_migrations (
   name text primary key,
   applied_at timestamptz not null default now()
