@@ -7,5 +7,7 @@ export default defineProject({
     globalSetup: ['../../packages/core/test/global-setup.ts'],
     // One test file at a time, like @dose/core: files share one Postgres server.
     fileParallelism: false,
+    // After core and api: see packages/core/vitest.config.ts.
+    sequence: { groupOrder: 3 },
   },
 });
