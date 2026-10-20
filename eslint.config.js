@@ -3,7 +3,14 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.wrangler/**', 'graphify-out/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.wrangler/**',
+      'graphify-out/**',
+      // Deliberately invalid input for the boundaries test; it is never compiled or linted.
+      'test/boundaries/fixtures/**',
+    ],
   },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
@@ -18,7 +25,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.js'],
+    files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs', globals: { module: 'writable' } },
   },
 );

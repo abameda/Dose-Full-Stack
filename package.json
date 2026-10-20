@@ -7,13 +7,16 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "pnpm -r --if-present run typecheck",
+    "typecheck": "pnpm -r --if-present run typecheck && tsc -p test/boundaries/tsconfig.json",
     "lint": "eslint .",
+    "boundaries": "node scripts/boundaries.mjs",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "dependency-cruiser": "18.6.0",
     "eslint": "10.13.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.0",
