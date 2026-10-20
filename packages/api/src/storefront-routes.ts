@@ -15,8 +15,10 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { ApiDeps, ApiEnv } from './app';
 
 /**
- * The catalogue stores no image dimensions yet, so every product image is described as the 4:5
- * portrait the seed (Task 12) normalises them to. Reserving the box keeps the page from shifting.
+ * The catalogue stores no image dimensions, so every product image is described as the 4:5
+ * portrait 1200x1500. Task 12 owns making that true: its seed re-encodes every image to exactly
+ * 1200x1500 JPEG before upload and tests the stored dimensions. Reserving the box keeps the page
+ * from shifting; change this and the seed together.
  */
 const PRODUCT_IMAGE_SIZE = { width: 1200, height: 1500 };
 
