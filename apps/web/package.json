@@ -17,6 +17,7 @@
     "@dose/d0-baseline": "workspace:*",
     "@dose/shop": "workspace:*",
     "@dose/ui": "workspace:*",
+    "@dose/x1-studio": "workspace:*",
     "astro": "7.3.5",
     "jose": "6.2.12",
     "react": "19.3.0",

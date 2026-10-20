@@ -52,6 +52,17 @@ function staffVerifier(env: WorkerEnv, environment: ApiDeps['env']): ApiDeps['ve
   });
 }
 
+let verifier: { env: WorkerEnv; verify: ApiDeps['verifyStaff'] } | undefined;
+
+/**
+ * Who is asking, for the admin API and the studio alike: one verifier per isolate, so Access's
+ * signing keys are fetched once and cached.
+ */
+export function verifyStaffFor(env: WorkerEnv): ApiDeps['verifyStaff'] {
+  if (verifier?.env !== env) verifier = { env, verify: staffVerifier(env, environmentOf(env)) };
+  return verifier.verify;
+}
+
 type Api = ReturnType<typeof createApp>;
 let api: { env: WorkerEnv; app: Api } | undefined;
 
@@ -66,7 +77,7 @@ export function apiFor(env: WorkerEnv): Api {
       db: () => requestDb(env),
       env: environment,
       now: () => new Date(),
-      verifyStaff: staffVerifier(env, environment),
+      verifyStaff: verifyStaffFor(env),
       webhookProviders: {}, // Paymob arrives in a later milestone
     });
     api = { env, app };

@@ -95,6 +95,7 @@ export const en = {
   errorNetwork: 'We could not reach the shop. Check your connection and try again.',
   errorUnexpected: 'Something went wrong on our side and your order was not placed. Please try again.',
   checkoutDisabled: 'Ordering is not available on this page.',
+  studioCheckoutDisabled: 'Checkout is disabled in the studio',
 
   // ── Confirmation ──────────────────────────────────────────────────────────────────────────
   thanksTitle: 'Thank you | DÖSE',
@@ -190,6 +191,7 @@ export const ar: Messages = {
   errorNetwork: 'معرفناش نوصل للمتجر. اتأكد من الإنترنت وجرّب تاني.',
   errorUnexpected: 'حصلت مشكلة عندنا ومتسجّلش طلبك. جرّب تاني.',
   checkoutDisabled: 'تسجيل الطلبات مش متاح في الصفحة دي.',
+  studioCheckoutDisabled: 'الدفع غير متاح في الاستوديو',
 
   thanksTitle: 'شكراً | DÖSE',
   thanksHeading: 'طلبك وصلنا.',

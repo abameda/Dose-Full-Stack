@@ -1,4 +1,4 @@
-import type { BagLine, Lang } from '@dose/contract';
+import type { BagLine, CheckoutResult, Lang } from '@dose/contract';
 import { MAX_LINE_QUANTITY } from '@dose/contract/limits';
 import { formatEgp } from '@dose/contract/money';
 import { Button, Dialog, LinkButton } from '@dose/ui';
@@ -22,6 +22,14 @@ type Pricing =
   | { status: 'error' }
   | { status: 'ready'; priced: ReadonlyMap<string, Priced>; unavailable: readonly string[] };
 
+/** What the studio asks `checkout` with: the studio client answers `checkout_disabled` without reading it. */
+const STUDIO_CHECKOUT_PROBE = {
+  idempotencyKey: '',
+  quotedTotal: 0,
+  customer: { name: '', phone: '' },
+  address: { governorate: '', area: '', street: '', building: '' },
+} as const;
+
 function units(lines: readonly BagLine[]): number {
   return lines.reduce((sum, line) => sum + line.quantity, 0);
 }
@@ -39,6 +47,7 @@ export function BagDrawer({ lang, direction, surface = 'storefront', checkoutHre
   const [open, setOpen] = useState(false);
   const [pricing, setPricing] = useState<Pricing>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [checkoutResult, setCheckoutResult] = useState<CheckoutResult | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const key = skuKey(lines);
 
@@ -63,6 +72,11 @@ export function BagDrawer({ lang, direction, surface = 'storefront', checkoutHre
   }, [open, key, lang, client, attempt]);
 
   const close = () => { setOpen(false); };
+  // The studio previews a direction but never takes an order: its checkout button asks the studio
+  // client, which refuses without a network call, and says so.
+  const tryStudioCheckout = () => {
+    void client.checkout({ ...STUDIO_CHECKOUT_PROBE, lang }).then(setCheckoutResult);
+  };
 
   let body;
   if (lines.length === 0) {
@@ -136,9 +150,20 @@ export function BagDrawer({ lang, direction, surface = 'storefront', checkoutHre
           <bdi>{formatEgp(subtotal, lang)}</bdi>
         </p>
         <p className="dose-bag__note">{s.deliveryAtCheckout}</p>
-        <LinkButton block href={checkoutHref} onClick={close}>
-          {s.checkout}
-        </LinkButton>
+        {surface === 'studio' ? (
+          <>
+            <Button block onClick={tryStudioCheckout}>
+              {s.checkout}
+            </Button>
+            <p className="dose-bag__note" role="status">
+              {checkoutResult?.ok === false && checkoutResult.code === 'checkout_disabled' ? s.studioCheckoutDisabled : ''}
+            </p>
+          </>
+        ) : (
+          <LinkButton block href={checkoutHref} onClick={close}>
+            {s.checkout}
+          </LinkButton>
+        )}
       </>
     );
   }

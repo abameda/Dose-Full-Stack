@@ -30,7 +30,7 @@ const alternate = (to: Lang) => new URL(`/${to}${path}`, Astro.url).href;
 ---
 
 <!doctype html>
-<html lang={lang} dir={dir}>
+<html lang={lang} dir={dir} data-direction={DIRECTION_ID}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

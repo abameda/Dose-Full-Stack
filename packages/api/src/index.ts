@@ -3,5 +3,5 @@ export type { ApiDeps, ApiEnv, WebhookProvider } from './app';
 export { createAccessVerifier, findActiveStaff } from './auth';
 export type { AccessVerifierOptions } from './auth';
 export { toProductView } from './storefront-routes';
-export { ADMIN_ROUTES } from './permissions';
+export { ADMIN_ROUTES, PRIVATE_HEADERS } from './permissions';
 export type { AdminRoute } from './permissions';
