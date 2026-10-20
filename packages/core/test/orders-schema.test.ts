@@ -55,7 +55,7 @@ describe('rule 1: the order row refuses figures that do not add up', () => {
     const { owner } = await withTestDb();
     const customer = await makeCustomer(owner);
     await expect(makeOrder(owner, customer.id, { governorate: 'atlantis' })).rejects.toThrow(/orders_governorate_fkey/);
-    const checkoutKey = '5f0c1f0e-7a55-4a52-9a5d-0e6f5a0b9c11';
+    const checkoutKey = '5f0c1f0e-7a55-4a52-9a5d-0e6f5a0b9c11'; // gitleaks:allow: a test UUID, not a secret
     await makeOrder(owner, customer.id, { checkoutKey });
     await expect(makeOrder(owner, customer.id, { checkoutKey })).rejects.toEqual(
       violation(UNIQUE_VIOLATION, 'orders_checkout_key_key'),

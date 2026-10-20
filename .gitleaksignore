@@ -1,0 +1,6 @@
+# Findings that are not secrets, by gitleaks fingerprint (commit:file:rule:line). Keep this list
+# short and explain each entry.
+# A random UUID used as a checkout key in a test (flagged as generic-api-key because the variable is
+# called checkoutKey). The same line carries `gitleaks:allow` in the current tree; this entry covers
+# the commit that introduced it.
+67a2a881da4996988a91fe14b954dd28d290ed7f:packages/core/test/orders-schema.test.ts:generic-api-key:58
