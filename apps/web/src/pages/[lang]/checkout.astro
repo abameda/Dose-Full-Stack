@@ -1,0 +1,14 @@
+---
+// The checkout page: Direction 0's, with the governorates named in the page's language.
+import CheckoutPage from '@dose/d0-baseline/CheckoutPage.astro';
+import { governorateOptions } from '../../storefront';
+
+export const prerender = false;
+
+const lang = Astro.locals.lang;
+if (lang === null || Astro.params.lang !== lang) {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<CheckoutPage lang={lang} governorates={governorateOptions(lang)} />

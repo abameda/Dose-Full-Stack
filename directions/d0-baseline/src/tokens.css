@@ -1,0 +1,20 @@
+/*
+ * Direction 0's look: the only place it differs from the shop's default tokens. The baseline is
+ * deliberately plain and fast (system fonts, no web fonts, no motion): it is the permanent
+ * fallback that can always launch. Every colour pair here meets WCAG AA.
+ */
+:root {
+  --color-bg: #faf6f0;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f2ece2;
+  --color-text: #1d1a16;
+  --color-text-muted: #595247;
+  --color-border: #ddd4c6;
+  --color-border-strong: #857c6e;
+  --color-accent: #1d1a16;
+  --color-accent-text: #faf6f0;
+
+  --font-heading: Georgia, 'Times New Roman', 'Noto Naskh Arabic', 'Segoe UI', serif;
+  --text-2xl: clamp(2rem, 6vw, 3.25rem);
+  --content-width: 70rem;
+}

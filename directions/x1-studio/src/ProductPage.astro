@@ -1,0 +1,348 @@
+---
+// Direction X1's product page. It replaces the whole page: its own document, header and
+// navigation, and a hero whose canvas animation is kept alive between products. It is drawn from
+// the same `ProductView` as Direction 0's page; only the layout and the look differ. It is for
+// the studio (staff only), so it asks search engines to ignore it and its bag never checks out.
+import { ClientRouter } from 'astro:transitions';
+import type { Lang, ProductView } from '@dose/contract';
+import { AddToBag, BagDrawer, fill, t } from '@dose/shop';
+import '@dose/ui/tokens.css';
+import '@dose/ui/components.css';
+import '@dose/shop/shop.css';
+import './tokens.css';
+import { DIRECTION_ID } from './index';
+import { MotionHero } from './MotionHero';
+
+interface Props {
+  lang: Lang;
+  product: ProductView;
+  /** Every published product, for the navigation. */
+  products: ProductView[];
+}
+
+const { lang, product, products } = Astro.props;
+const s = t(lang);
+const other: Lang = lang === 'ar' ? 'en' : 'ar';
+const dir = lang === 'ar' ? 'rtl' : 'ltr';
+const studioPath = (to: Lang, slug: string) => `/studio/${to}/products/${slug}`;
+
+// Staff-only copy: a short note, not a customer string.
+const words = {
+  en: {
+    title: '{name} | DÖSE studio',
+    badge: 'Studio X1',
+    eyebrow: 'Direction X1, not public',
+    products: 'Products',
+    storefront: 'See it on the storefront',
+    note: 'Studio preview of Direction X1. Staff only. Checkout is disabled here.',
+  },
+  ar: {
+    title: '{name} | استوديو DÖSE',
+    badge: 'استوديو X1',
+    eyebrow: 'اتجاه X1، مش للعامة',
+    products: 'المنتجات',
+    storefront: 'شوفها في المتجر',
+    note: 'معاينة الاتجاه X1 في الاستوديو. للفريق بس. الدفع غير متاح هنا.',
+  },
+}[lang];
+---
+
+<!doctype html>
+<html lang={lang} dir={dir} data-direction={DIRECTION_ID}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{fill(words.title, { name: product.name })}</title>
+    <ClientRouter />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{s.skipToContent}</a>
+    <header class="x1-bar">
+      <a class="x1-brand" href={studioPath(lang, product.slug)} aria-label={s.homeLink}>
+        {s.brand}
+        <span class="x1-badge">{words.badge}</span>
+      </a>
+      <nav class="x1-nav" aria-label={words.products}>
+        {
+          products.map((entry) => (
+            <a href={studioPath(lang, entry.slug)} aria-current={entry.slug === product.slug ? 'page' : undefined}>
+              {entry.name}
+            </a>
+          ))
+        }
+      </nav>
+      <div class="x1-actions">
+        <a class="x1-link" href={`/${lang}/products/${product.slug}`} data-astro-reload>{words.storefront}</a>
+        <a class="x1-link" href={studioPath(other, product.slug)} lang={other} hreflang={other} aria-label={s.switchLanguage} data-astro-reload>
+          {s.otherLanguageName}
+        </a>
+        <BagDrawer client:load transition:persist="x1-bag" lang={lang} direction={DIRECTION_ID} surface="studio" checkoutHref={`/${lang}/checkout`} />
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <section class="x1-hero" aria-labelledby="x1-title">
+        <MotionHero client:load transition:persist="hero" />
+        <div class="x1-hero__copy">
+          <p class="x1-eyebrow">{words.eyebrow}</p>
+          <h1 id="x1-title">{product.name}</h1>
+        </div>
+      </section>
+
+      <div class="x1-body">
+        <section class="x1-buy" aria-label={s.addToBag}>
+          <AddToBag client:load lang={lang} direction={DIRECTION_ID} surface="studio" variants={product.variants} />
+          <p class="x1-delivery">{s.productDelivery}</p>
+        </section>
+
+        <div class="x1-copy">
+          <section aria-labelledby="x1-story">
+            <h2 id="x1-story">{s.storyHeading}</h2>
+            <p>{product.story}</p>
+          </section>
+          <section aria-labelledby="x1-details">
+            <h2 id="x1-details">{s.detailsHeading}</h2>
+            <p>{product.labelCopy}</p>
+          </section>
+        </div>
+
+        <div class="x1-gallery">
+          {
+            product.images.map((image, index) => (
+              <img
+                src={image.src}
+                alt={image.alt}
+                width={image.width}
+                height={image.height}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+            ))
+          }
+        </div>
+      </div>
+    </main>
+
+    <footer class="x1-footer">
+      <p>{words.note}</p>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+  }
+  h1,
+  h2 {
+    font-family: var(--font-heading);
+    line-height: var(--leading-heading);
+  }
+  a {
+    color: inherit;
+  }
+  a:focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  img {
+    max-inline-size: 100%;
+    block-size: auto;
+  }
+  main:focus {
+    outline: none;
+  }
+  .skip-link {
+    position: absolute;
+    inset-inline-start: var(--space-3);
+    inset-block-start: -10rem;
+    z-index: 200;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+  .skip-link:focus {
+    inset-block-start: var(--space-3);
+  }
+
+  /* The bar: brand, the products, then the actions. It wraps on a phone. */
+  .x1-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+  .x1-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-block-size: var(--target-size);
+    font-family: var(--font-heading);
+    font-size: var(--text-xl);
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+  .x1-badge {
+    padding: 0 var(--space-2);
+    border: var(--border-width) solid var(--color-accent);
+    border-radius: var(--radius);
+    color: var(--color-accent);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    letter-spacing: 0;
+  }
+  .x1-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    margin-inline-start: auto;
+  }
+  .x1-nav a,
+  .x1-link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-size);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+  }
+  .x1-nav a[aria-current='page'] {
+    color: var(--color-accent);
+  }
+  .x1-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+  }
+
+  /* The hero: the canvas fills it; the name sits low in it. */
+  .x1-hero {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    min-block-size: var(--x1-hero-height);
+    overflow: hidden;
+    background: var(--color-surface-sunken);
+  }
+  .x1-hero__canvas {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  .x1-hero__copy {
+    position: relative;
+    inline-size: 100%;
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-6) var(--space-4);
+  }
+  .x1-eyebrow {
+    margin: 0 0 var(--space-2);
+    color: var(--color-accent);
+    font-size: var(--text-sm);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .x1-hero h1 {
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-normal);
+    letter-spacing: 0.02em;
+  }
+
+  /* The body: the purchase panel first on a phone, a column beside the copy on a wide screen. */
+  .x1-body {
+    display: grid;
+    gap: var(--space-6);
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-6) var(--space-4) var(--space-8);
+  }
+  .x1-buy {
+    display: grid;
+    gap: var(--space-4);
+    align-content: start;
+    padding: var(--space-5);
+    border: var(--border-width) solid var(--color-border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+  .x1-delivery {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+  .x1-copy {
+    display: grid;
+    gap: var(--space-5);
+    max-inline-size: var(--reading-width);
+  }
+  .x1-copy h2 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-normal);
+    letter-spacing: 0.06em;
+    color: var(--color-accent);
+  }
+  .x1-copy p {
+    margin: 0;
+  }
+  .x1-gallery {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .x1-gallery img {
+    flex: none;
+    inline-size: min(70vw, 22rem);
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    scroll-snap-align: start;
+    background: var(--color-surface-sunken);
+    border-radius: var(--radius-lg);
+  }
+  @media (min-width: 56rem) {
+    .x1-body {
+      grid-template-columns: minmax(0, 1fr) 24rem;
+      grid-template-areas:
+        'copy buy'
+        'gallery buy';
+      align-items: start;
+    }
+    .x1-copy {
+      grid-area: copy;
+    }
+    .x1-buy {
+      grid-area: buy;
+      position: sticky;
+      inset-block-start: var(--space-4);
+    }
+    .x1-gallery {
+      grid-area: gallery;
+    }
+  }
+  .x1-footer {
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-5) var(--space-4) var(--space-7);
+    border-block-start: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+  .x1-footer p {
+    margin: 0;
+  }
+</style>

@@ -1,0 +1,33 @@
+{
+  "name": "@dose/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "astro build",
+    "dev": "astro dev"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.3.3",
+    "@astrojs/react": "7.0.0",
+    "@dose/admin": "workspace:*",
+    "@dose/api": "workspace:*",
+    "@dose/contract": "workspace:*",
+    "@dose/core": "workspace:*",
+    "@dose/d0-baseline": "workspace:*",
+    "@dose/shop": "workspace:*",
+    "@dose/ui": "workspace:*",
+    "@dose/x1-studio": "workspace:*",
+    "astro": "7.3.5",
+    "jose": "6.2.12",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261005.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "wrangler": "4.147.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@dose/d0-baseline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./Layout.astro": "./src/Layout.astro",
+    "./HomePage.astro": "./src/HomePage.astro",
+    "./ProductPage.astro": "./src/ProductPage.astro",
+    "./CheckoutPage.astro": "./src/CheckoutPage.astro",
+    "./ConfirmationPage.astro": "./src/ConfirmationPage.astro"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@dose/contract": "workspace:*",
+    "@dose/shop": "workspace:*",
+    "@dose/ui": "workspace:*",
+    "react": "19.3.0"
+  }
+}

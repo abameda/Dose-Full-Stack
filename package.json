@@ -1,0 +1,34 @@
+{
+  "name": "dose",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present run typecheck && tsc -p test/boundaries/tsconfig.json && tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "boundaries": "node scripts/boundaries.mjs",
+    "rules:check": "pnpm --filter @dose/core run rules:check",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test",
+    "seed": "pnpm --filter @dose/core run seed",
+    "e2e": "playwright test",
+    "lhci": "lhci autorun"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@eslint/js": "10.0.1",
+    "@lhci/cli": "0.15.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "dependency-cruiser": "18.6.0",
+    "eslint": "10.13.0",
+    "pg": "8.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,23 @@
+---
+// The studio's product page: Direction X1's, fed with the very same published product as the
+// storefront's. The middleware (src/middleware.ts) has already required a signed-in staff member
+// and marked the response private and not indexed by the time this runs.
+import ProductPage from '@dose/x1-studio/ProductPage.astro';
+import { loadProduct, loadProducts } from '../../../../storefront';
+
+export const prerender = false;
+
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+const lang = Astro.locals.lang;
+const slug = Astro.params.slug ?? '';
+if (lang === null || Astro.params.lang !== lang || !SLUG.test(slug)) {
+  return new Response('Not found', { status: 404 });
+}
+const [product, products] = await Promise.all([loadProduct(slug, lang), loadProducts(lang)]);
+if (product === null) {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<ProductPage lang={lang} product={product} products={products} />

@@ -1,0 +1,18 @@
+---
+// The page a customer lands on after ordering. It shows the order number from the address and
+// nothing else about the order, so it needs no lookup and exposes no one's details.
+import ConfirmationPage from '@dose/d0-baseline/ConfirmationPage.astro';
+
+export const prerender = false;
+
+/** `D` and the sequence (decision 0002: `D10001` onward). */
+const ORDER_NUMBER = /^D\d{5,}$/;
+
+const lang = Astro.locals.lang;
+const number = Astro.params.number ?? '';
+if (lang === null || Astro.params.lang !== lang || !ORDER_NUMBER.test(number)) {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<ConfirmationPage lang={lang} orderNumber={number} />

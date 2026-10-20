@@ -1,0 +1,52 @@
+---
+// Direction 0's thanks page: the order number and what happens next.
+import type { Lang } from '@dose/contract';
+import { LinkButton } from '@dose/ui';
+import { t } from '@dose/shop';
+import Layout from './Layout.astro';
+
+interface Props {
+  lang: Lang;
+  orderNumber: string;
+}
+
+const { lang, orderNumber } = Astro.props;
+const s = t(lang);
+---
+
+<Layout lang={lang} title={s.thanksTitle} path={`/orders/${orderNumber}/thanks`} noindex>
+  <section class="thanks">
+    <h1>{s.thanksHeading}</h1>
+    <p class="number">
+      <span>{s.thanksOrderNumber}</span>
+      <strong><bdi>{orderNumber}</bdi></strong>
+    </p>
+    <p>{s.thanksNext}</p>
+    <LinkButton href={`/${lang}`}>{s.backToCollection}</LinkButton>
+  </section>
+</Layout>
+
+<style>
+  .thanks {
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+    max-inline-size: var(--reading-width);
+    padding-block: var(--space-6);
+  }
+  h1 {
+    margin: 0;
+    font-size: var(--text-2xl);
+  }
+  p {
+    margin: 0;
+  }
+  .number {
+    display: grid;
+    gap: var(--space-1);
+  }
+  .number strong {
+    font-size: var(--text-xl);
+    letter-spacing: 0.04em;
+  }
+</style>

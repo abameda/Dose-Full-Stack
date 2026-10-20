@@ -1,0 +1,156 @@
+---
+// Direction 0's page frame: the document, the header with the bag, the footer. Astro's client
+// router is on, so moving between pages swaps the content instead of reloading; the bag island
+// is kept alive across those moves (`transition:persist`), which is what keeps its dialog and
+// count steady.
+import { ClientRouter } from 'astro:transitions';
+import type { Lang } from '@dose/contract';
+import { BagDrawer, t } from '@dose/shop';
+import '@dose/ui/tokens.css';
+import '@dose/ui/components.css';
+import '@dose/shop/shop.css';
+import './tokens.css';
+import { DIRECTION_ID } from './index';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description?: string;
+  /** The page's path after the language, e.g. `/products/paradise`; empty for the home page. */
+  path: string;
+  /** Pages that are not for search results: the checkout and the thanks page. */
+  noindex?: boolean;
+}
+
+const { lang, title, description, path, noindex = false } = Astro.props;
+const s = t(lang);
+const other: Lang = lang === 'ar' ? 'en' : 'ar';
+const dir = lang === 'ar' ? 'rtl' : 'ltr';
+const alternate = (to: Lang) => new URL(`/${to}${path}`, Astro.url).href;
+---
+
+<!doctype html>
+<html lang={lang} dir={dir} data-direction={DIRECTION_ID}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description === undefined ? null : <meta name="description" content={description} />}
+    {noindex ? <meta name="robots" content="noindex" /> : null}
+    <link rel="alternate" hreflang="ar" href={alternate('ar')} />
+    <link rel="alternate" hreflang="en" href={alternate('en')} />
+    <ClientRouter />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{s.skipToContent}</a>
+    <header class="site-header">
+      <a class="brand" href={`/${lang}`} aria-label={s.homeLink}>{s.brand}</a>
+      <div class="site-actions">
+        <a class="language-link" href={`/${other}${path}`} lang={other} hreflang={other} aria-label={s.switchLanguage} data-astro-reload>
+          {s.otherLanguageName}
+        </a>
+        <BagDrawer client:load transition:persist="bag" lang={lang} direction={DIRECTION_ID} checkoutHref={`/${lang}/checkout`} />
+      </div>
+    </header>
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>{s.footerNote}</p>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+    line-height: var(--leading-body);
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    line-height: var(--leading-heading);
+  }
+  a {
+    color: inherit;
+  }
+  a:focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  img {
+    max-inline-size: 100%;
+    block-size: auto;
+  }
+  main {
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+  main:focus {
+    outline: none;
+  }
+  .skip-link {
+    position: absolute;
+    inset-inline-start: var(--space-3);
+    inset-block-start: -10rem;
+    z-index: 200;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+  .skip-link:focus {
+    inset-block-start: var(--space-3);
+  }
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-3) var(--space-4);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-size);
+    font-family: var(--font-heading);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-strong);
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+  .site-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .language-link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-size);
+    padding-inline: var(--space-3);
+  }
+  .site-footer {
+    max-inline-size: var(--content-width);
+    margin-inline: auto;
+    padding: var(--space-5) var(--space-4) var(--space-7);
+    border-block-start: var(--border-width) solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+  .site-footer p {
+    margin: 0;
+  }
+</style>

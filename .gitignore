@@ -16,3 +16,11 @@ dist/
 .env.*
 !.env.example
 .dev.vars
+.astro/
+
+# Playwright output
+test-results/
+playwright-report/
+
+# Lighthouse CI reports
+.lighthouseci/

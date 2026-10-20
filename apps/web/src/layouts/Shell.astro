@@ -1,0 +1,21 @@
+---
+// The document shell every page shares: language and direction come from the middleware.
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const lang = Astro.locals.lang ?? 'en';
+const dir = Astro.locals.dir;
+---
+
+<!doctype html>
+<html lang={lang} dir={dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

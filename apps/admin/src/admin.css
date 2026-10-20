@@ -1,0 +1,339 @@
+/*
+ * Styles for the admin. Design tokens only (@dose/ui/tokens.css) and logical properties, like the
+ * rest of the interface code. Written phone-first: the admin is used at 375 px wide, so every
+ * table becomes a stack of labelled rows on a narrow screen and nothing scrolls sideways.
+ */
+
+.dose-admin-body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  line-height: var(--leading-body);
+}
+
+.admin-shell {
+  min-block-size: 100vh;
+}
+
+.admin-skip {
+  position: absolute;
+  inset-inline-start: var(--space-2);
+  inset-block-start: calc(-1 * var(--target-size) - var(--space-4));
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.admin-skip:focus {
+  inset-block-start: var(--space-2);
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  z-index: 200;
+}
+
+/* ── Frame ─────────────────────────────────────────────────────────────────────────────── */
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+.admin-header p {
+  margin: 0;
+}
+.admin-brand {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+}
+.admin-who {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.admin-header nav {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+.admin-header nav a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-size);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+}
+.admin-header nav a[aria-current='page'] {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.admin-main {
+  max-inline-size: var(--content-width);
+  margin-inline: auto;
+  padding: var(--space-4);
+}
+.admin-main h1 {
+  margin-block: 0 var(--space-4);
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  line-height: var(--leading-heading);
+}
+.admin-main h2 {
+  margin-block: var(--space-5) var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  line-height: var(--leading-heading);
+}
+.admin-main h3 {
+  margin-block: var(--space-3) var(--space-1);
+  font-size: var(--text-md);
+}
+.admin-main a {
+  color: var(--color-text);
+}
+.admin-main a:focus-visible,
+.admin-header nav a:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.admin-muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.admin-strong {
+  font-weight: var(--weight-strong);
+}
+.admin-block {
+  display: block;
+}
+
+/* ── Notices ───────────────────────────────────────────────────────────────────────────── */
+.admin-notice {
+  margin-block: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-notice-surface);
+}
+.admin-notice--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-surface);
+}
+.admin-notice p {
+  margin: 0 0 var(--space-2);
+}
+
+/* ── Today ─────────────────────────────────────────────────────────────────────────────── */
+.admin-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+}
+.admin-stat__number {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+.admin-queue {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-queue__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  min-block-size: var(--target-size);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  text-decoration: none;
+}
+.admin-queue__number {
+  font-weight: var(--weight-strong);
+}
+
+/* ── Filters and forms ─────────────────────────────────────────────────────────────────── */
+.admin-filter {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.admin-form {
+  display: grid;
+  gap: var(--space-4);
+}
+.admin-choice {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.admin-choice legend {
+  padding: 0;
+  margin-block-end: var(--space-2);
+  font-weight: var(--weight-strong);
+}
+.admin-choice__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-size);
+  padding-inline: var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.admin-choice__option input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin: 0;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+/* ── Tables: stacked rows on a phone ───────────────────────────────────────────────────── */
+.admin-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+}
+.admin-table th,
+.admin-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  vertical-align: top;
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+.admin-table thead th {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.admin-table tbody th {
+  font-weight: var(--weight-strong);
+}
+
+@media (max-width: 40rem) {
+  .admin-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .admin-table,
+  .admin-table tbody {
+    display: block;
+  }
+  .admin-table tr {
+    display: grid;
+    gap: var(--space-1);
+    margin-block-end: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+  }
+  .admin-table th,
+  .admin-table td {
+    display: block;
+    padding: var(--space-1) 0;
+    border: 0;
+  }
+  .admin-table [data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    inline-size: 6rem;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-normal);
+  }
+}
+
+/* ── Badges, states, totals, timeline ──────────────────────────────────────────────────── */
+.admin-badge {
+  display: inline-block;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+.admin-badge--pending {
+  background: var(--color-notice-surface);
+}
+.admin-badge--confirmed {
+  background: var(--color-surface-sunken);
+}
+.admin-badge--cancelled {
+  border-color: var(--color-danger);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
+.admin-states,
+.admin-totals {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+.admin-states dt,
+.admin-totals dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.admin-states dd {
+  margin: 0;
+}
+.admin-states dd p {
+  margin: var(--space-1) 0 0;
+}
+.admin-totals {
+  margin-block-start: var(--space-3);
+  max-inline-size: 22rem;
+}
+.admin-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.admin-totals dd {
+  margin: 0;
+}
+.admin-totals__total {
+  padding-block-start: var(--space-2);
+  border-block-start: var(--border-width) solid var(--color-border-strong);
+  font-weight: var(--weight-strong);
+}
+
+.admin-timeline {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-timeline li {
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--color-border-strong);
+}
+.admin-timeline p {
+  margin: 0;
+}

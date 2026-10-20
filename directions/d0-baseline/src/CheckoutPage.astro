@@ -1,0 +1,28 @@
+---
+// Direction 0's checkout page: a heading and the shop's checkout form.
+import type { Lang } from '@dose/contract';
+import { CheckoutForm, t, type GovernorateOption } from '@dose/shop';
+import Layout from './Layout.astro';
+import { DIRECTION_ID } from './index';
+
+interface Props {
+  lang: Lang;
+  /** The 27 governorates, named in the page's language. */
+  governorates: GovernorateOption[];
+}
+
+const { lang, governorates } = Astro.props;
+const s = t(lang);
+---
+
+<Layout lang={lang} title={s.checkoutTitle} path="/checkout" noindex>
+  <h1>{s.checkoutHeading}</h1>
+  <CheckoutForm client:load lang={lang} direction={DIRECTION_ID} governorates={governorates} />
+</Layout>
+
+<style>
+  h1 {
+    margin: 0 0 var(--space-5);
+    font-size: var(--text-2xl);
+  }
+</style>

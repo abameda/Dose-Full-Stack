@@ -124,7 +124,7 @@ apps/web/                               Astro app, wrangler.jsonc, routes, API m
 apps/node-control/                      Node server for the PoC control + Dockerfile + fly.toml
 poc/concurrency.ts                      deployed-target concurrency runner
 e2e/                                    Playwright specs
-docs/decisions/                         0001 toolchain · 0002 defaults · 0003 beliefs · 0004 runtime · 0005 storefront
+docs/decisions/                         0001 toolchain · 0002 defaults · 0003 beliefs · 0004 runtime · 0005 storefront · 0006 environments · 0007 app-role privileges
 ```
 
 ---
@@ -265,6 +265,7 @@ test('a failed transaction leaves nothing behind', async () => {
   - `stock_levels(variant_id pk fk, on_hand int not null default 0, reserved int not null default 0, check (reserved >= 0 and reserved <= on_hand))`
   - `stock_movements(id bigserial pk, variant_id fk, reason text check in ('received','reserved','released','sold','returned','adjusted'), on_hand_delta int, reserved_delta int, source_key text unique not null, actor_type text, actor_id text, at timestamptz default now())`
   - Movement deltas, fixed: received `(+q, 0)`, reserved `(0, +q)`, released `(0, −q)`, sold `(−q, −q)`, returned `(+q, 0)`, adjusted `(±q, 0)`.
+  - Grants to `dose_app`: the default `SELECT, INSERT, UPDATE` on the other tables, but only `SELECT, INSERT` on `stock_movements` (append-only ledger, rule 5; decision 0007, corrected after the whole-branch review).
 - Produces:
   ```ts
   type Actor = { type: 'customer' | 'staff' | 'system'; id: string };
@@ -340,7 +341,10 @@ test('the database refuses reserved > on_hand even without the helpers', async (
 `pricing.property.test.ts` (rule 1, fast-check, 5,000 bags of 1–10 lines, prices 1–10,000,000 piastres, quantities 1–10, delivery 0–50,000):
 ```ts
 expect(r.total).toBe(r.subtotal - r.discountTotal + r.deliveryFee);
-expect(r.subtotal).toBe(sum(r.lines.map(l => l.lineTotal)));
+// subtotal is gross (before discounts), so each discount is subtracted once (corrected after the whole-branch review)
+expect(r.subtotal).toBe(sum(r.lines.map(l => l.unitPrice * l.quantity)));
+expect(r.discountTotal).toBe(sum(r.lines.map(l => l.lineDiscount)));
+expect(r.total).toBe(sum(r.lines.map(l => l.lineTotal)) + r.deliveryFee);
 expect(r.discountTotal).toBeLessThanOrEqual(r.subtotal);
 for (const n of [r.total, r.subtotal, r.discountTotal, ...r.lines.map(l => l.lineTotal)]) expect(Number.isSafeInteger(n) && n >= 0).toBe(true);
 ```
@@ -479,6 +483,7 @@ Tag it `@slow`; it runs in CI on every change.
 - Create: `packages/core/migrations/0004_webhooks_outbox.sql`, `packages/core/src/webhooks.ts`, `packages/core/src/outbox.ts`, `packages/core/test/webhooks.test.ts`, `packages/core/test/outbox.test.ts`
 
 **Interfaces:**
+- Grants to `dose_app`: only `SELECT, INSERT` on `webhook_receipts` (append-only, rule 8; decision 0007, corrected after the whole-branch review); the default `SELECT, INSERT, UPDATE` on `outbox`.
 - Schema: `webhook_receipts(id bigserial pk, provider text, event_id text, received_at timestamptz default now(), payload jsonb, unique (provider, event_id))`; `outbox(id bigserial pk, kind text, dedupe_key text unique, payload jsonb, status text check in ('pending','claimed','done'), attempts int default 0, claimed_until timestamptz null, provider_ref text null, created_at, done_at null)`.
 - Produces:
   ```ts
@@ -530,13 +535,13 @@ test('out-of-order distinct events each apply once', /* evt-2 before evt-1 → b
 **Interfaces:**
 - Produces: `type Violation = { rule: number; detail: string; ref?: string }`; `function checkRules(db: Db): Promise<Violation[]>`; `pnpm rules:check` (exits 1 and prints violations when any).
 - One query per rule implemented so far:
-  - 1: orders whose totals do not add up or whose lines do not sum to `subtotal`.
+  - 1: orders whose totals do not add up, whose gross line amounts (`unit_price * quantity`) do not sum to `subtotal`, or whose line discounts do not sum to `discount_total`.
   - 3: `stock_levels` with `reserved < 0` or `reserved > on_hand`.
   - 4: per variant, sum of `held` reservations ≠ `reserved`; `held` reservations on non-pending orders; `consumed` reservations on non-confirmed orders.
-  - 5: `stock_levels` ≠ sum of movement deltas per variant.
+  - 5: `stock_levels` ≠ sum of movement deltas per variant; `dose_app` holds `UPDATE` (table or any column), `DELETE` or `TRUNCATE` on `stock_movements`.
   - 6: state combinations outside the allowed set (e.g. `cancelled` order with payment not `voided`); `orders.version` ≠ max `entity_version` of its order audit events.
-  - 8 and 11: the unique constraints on `webhook_receipts(provider, event_id)` and `outbox(dedupe_key)` exist (catalog query).
-  - 12: `has_table_privilege('dose_app', 'audit_events', 'UPDATE'|'DELETE'|'TRUNCATE')` is false for all three.
+  - 8 and 11: the unique constraints on `webhook_receipts(provider, event_id)` and `outbox(dedupe_key)` exist (catalog query); for 8, `dose_app` also holds none of `UPDATE`, `DELETE`, `TRUNCATE` on `webhook_receipts`.
+  - 12: `has_table_privilege('dose_app', 'audit_events', 'UPDATE'|'DELETE'|'TRUNCATE')` is false for all three (`UPDATE` read with `has_any_column_privilege`, so a column grant counts).
 - Runs as `dose_owner` (it must read privileges and bypass nothing).
 
 - [ ] **Step 1: Write the failing tests** `rules.test.ts` — a clean database returns `[]`; then, as owner, corrupt one thing per rule (`test.each`: set `reserved` without a movement, flip a reservation to `held` on a confirmed order, bump `orders.version` without an audit event, grant `UPDATE` on `audit_events` to `dose_app`, …) and assert `checkRules` returns a violation with that rule number.
@@ -647,6 +652,7 @@ test('out-of-order distinct events each apply once', /* evt-2 before evt-1 → b
 - Produces: `apps/web` builds one Worker. Bindings: `HYPERDRIVE` (Hyperdrive; locally `localConnectionString` → local Postgres as `dose_app`), `MEDIA` (R2), vars `ENVIRONMENT`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`. Compatibility flag `nodejs_compat`. Cron trigger every 5 minutes runs `expireStaleOrders` then `deliverNext` until `'idle'` (max 50).
 - `/` redirects to `/ar` when `Accept-Language` prefers Arabic, else `/en`. Layout sets `<html lang dir>`. `GET /media/<key>` streams from R2 with `Cache-Control: public, max-age=31536000, immutable` (keys are content-hashed by the seed).
 - Seed (`pnpm seed --target <ownerUrl> --media local|r2`): Paradise and Blanc, 50ML `full` variants, real bilingual copy and label copy from O3 (or `PLACEHOLDER —` prefixed text until then), images uploaded to R2 under `products/<slug>/<sha256>.jpg`, stock received with source key `seed:<sku>`; two staff rows for local use (owner, operations) with `@example.test` emails. Idempotent.
+- Image dimensions (owner: this task). The catalogue stores no width or height, and the API (`packages/api/src/storefront-routes.ts`, `PRODUCT_IMAGE_SIZE`) reports every product image as exactly 1200x1500 (4:5) so the page can reserve the box before the image loads (layout-shift protection, Task 14's CLS and LCP budget). So the seed MUST re-encode every image (owner photos and placeholders alike) to a JPEG of exactly 1200x1500 (cover-crop, never stretch) before hashing and uploading; `<sha256>` in the key is the hash of the re-encoded bytes. The seed's own test file (`packages/core/seed/*.test.ts`) asserts the dimensions of the stored object for every seeded image (read the dimensions back from the uploaded bytes). If the size ever has to change, change the seed and `PRODUCT_IMAGE_SIZE` together.
 - Playwright projects: `iphone` (WebKit, iPhone 13) and `pixel` (Chromium, Pixel 7); `webServer` runs `astro build && wrangler dev` against local Postgres with `ENVIRONMENT=local`.
 
 - [ ] **Step 1: Write the failing test** `e2e/shell.spec.ts`:

@@ -1,0 +1,32 @@
+/*
+ * Direction X1's look: a dark, low-lit "studio" theme. It redefines the shop's design tokens, so
+ * the bag, the add-to-bag button and the dialog take the new look without touching their code.
+ * Every text and control pair here meets WCAG AA on its background.
+ */
+:root {
+  --color-bg: #12100e;
+  --color-surface: #1e1a17;
+  --color-surface-sunken: #0b0a09;
+  --color-text: #f4ede3;
+  --color-text-muted: #b8ad9d;
+  --color-border: #3a332c;
+  --color-border-strong: #8d8272;
+  --color-accent: #e6c79a;
+  --color-accent-text: #14110e;
+  --color-focus: #8db6ff;
+  --color-danger: #ff9a90;
+  --color-danger-surface: #3a1a17;
+  --color-notice-surface: #172238;
+  --color-overlay: rgb(0 0 0 / 0.7);
+
+  --font-heading: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Noto Naskh Arabic', serif;
+  --text-2xl: clamp(2.75rem, 11vw, 6rem);
+  --shadow-raised: 0 0.5rem 2rem rgb(0 0 0 / 0.6);
+  --content-width: 76rem;
+
+  /* The hero's light: three soft glows drawn on the canvas (MotionHero.tsx reads these). */
+  --x1-glow-1: 230 199 154;
+  --x1-glow-2: 141 182 255;
+  --x1-glow-3: 214 120 96;
+  --x1-hero-height: clamp(18rem, 62svh, 38rem);
+}

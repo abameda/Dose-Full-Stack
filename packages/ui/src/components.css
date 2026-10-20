@@ -1,0 +1,131 @@
+/*
+ * Styles for the @dose/ui primitives (Button, Dialog, Field). Written with logical properties
+ * (inline/block, start/end) so one rule serves right-to-left and left-to-right pages, and with
+ * design tokens only (tokens.css): no raw colours, sizes or fonts.
+ */
+
+/* ── Buttons ───────────────────────────────────────────────────────────────────────────── */
+.dose-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--target-size);
+  min-inline-size: var(--target-size);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dose-btn--secondary {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.dose-btn--quiet {
+  background: transparent;
+  color: var(--color-text);
+  border-color: transparent;
+  padding-inline: var(--space-3);
+}
+.dose-btn--block {
+  display: flex;
+  inline-size: 100%;
+}
+.dose-btn:disabled,
+.dose-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.dose-btn:focus-visible,
+.dose-field__control:focus-visible,
+.dose-dialog__panel:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ── Dialog ────────────────────────────────────────────────────────────────────────────── */
+.dose-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+}
+.dose-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--color-overlay);
+}
+.dose-dialog__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(100%, 26rem);
+  max-block-size: 100%;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-raised);
+}
+.dose-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+.dose-dialog__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  line-height: var(--leading-heading);
+}
+.dose-dialog__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────────────────── */
+.dose-field {
+  display: grid;
+  gap: var(--space-1);
+}
+.dose-field__label {
+  font-weight: var(--weight-strong);
+}
+.dose-field__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.dose-field__control {
+  inline-size: 100%;
+  min-block-size: var(--target-size);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+.dose-field__control[aria-invalid='true'] {
+  border-color: var(--color-danger);
+  border-width: 2px;
+}
+.dose-field__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
