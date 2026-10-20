@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Db } from '../src/db';
 
 // Test data only: arranged through the owner connection, never through the code under test.
@@ -87,4 +87,81 @@ export async function makeVariant(
     return row.id;
   });
   return { id, sku, pricePiastres };
+}
+
+export interface CustomerFixture {
+  id: string;
+  phoneE164: string;
+}
+
+/** A customer with a generated Egyptian mobile number (test data only). */
+export async function makeCustomer(
+  owner: Db,
+  overrides: { phoneE164?: string; name?: string } = {},
+): Promise<CustomerFixture> {
+  const phoneE164 = overrides.phoneE164 ?? `+2010${String(randomInt(0, 100_000_000)).padStart(8, '0')}`;
+  const [row] = await owner.query<{ id: string }>(
+    `insert into customers (phone_e164, name, email) values ($1, $2, $3) returning id`,
+    [phoneE164, overrides.name ?? 'Test Customer', `${unique()}@example.test`],
+  );
+  if (row === undefined) throw new Error('makeCustomer: insert returned no row');
+  return { id: row.id, phoneE164 };
+}
+
+export interface OrderOverrides {
+  checkoutKey?: string;
+  governorate?: string;
+  lang?: string;
+  direction?: string;
+  channel?: string;
+  paymentMethod?: string;
+  subtotal?: number;
+  discountTotal?: number;
+  deliveryFee?: number;
+  total?: number;
+  orderState?: string;
+  paymentState?: string;
+  fulfilmentState?: string;
+}
+
+export interface OrderFixture {
+  id: string;
+  number: string;
+}
+
+/**
+ * An order row inserted directly (no lines): a pending, cash-on-delivery order for EGP 1,500
+ * plus EGP 70 delivery in Cairo, unless told otherwise. Overrides are passed through unchecked
+ * so a test can break a rule on purpose.
+ */
+export async function makeOrder(owner: Db, customerId: string, overrides: OrderOverrides = {}): Promise<OrderFixture> {
+  const subtotal = overrides.subtotal ?? 150_000;
+  const discountTotal = overrides.discountTotal ?? 0;
+  const deliveryFee = overrides.deliveryFee ?? 7_000;
+  const [row] = await owner.query<{ id: string; number: string }>(
+    `insert into orders (checkout_key, customer_id, recipient_name, recipient_phone, governorate, area, street, building,
+                         lang, direction, channel, payment_method, subtotal, discount_total, delivery_fee, total,
+                         order_state, payment_state, fulfilment_state)
+     values ($1, $2, 'Test Recipient', '+201000000000', $3, 'Nasr City', 'Test Street', '1',
+             $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     returning id, number`,
+    [
+      overrides.checkoutKey ?? randomUUID(),
+      customerId,
+      overrides.governorate ?? 'cairo',
+      overrides.lang ?? 'en',
+      overrides.direction ?? 'ltr',
+      overrides.channel ?? 'web',
+      overrides.paymentMethod ?? 'cod',
+      subtotal,
+      discountTotal,
+      deliveryFee,
+      overrides.total ?? subtotal - discountTotal + deliveryFee,
+      overrides.orderState ?? 'pending',
+      overrides.paymentState ?? 'awaiting_collection',
+      overrides.fulfilmentState ?? 'unfulfilled',
+    ],
+  );
+  if (row === undefined) throw new Error('makeOrder: insert returned no row');
+  return row;
 }

@@ -21,6 +21,7 @@ The master plan leaves six values open that Milestone 1 needs now. The Milestone
 ## Consequences
 
 - Milestone 1 code and tests use these values.
+- **Used:** the order number scheme is in force from migration `0003_orders.sql` (`order_number_seq` starts at 10001; `orders.number` defaults to `'D' || nextval(...)`). The same migration seeds the 48-hour confirmation window in `settings` and the EGP 70 placeholder delivery fee for all 27 governorates. The bag limits (1-10 units per line, at most 10 lines) are enforced by `priceBag` and, for quantity, by a check on `order_lines`.
 - Changing one is a new decision record that supersedes this one.
 
 ## Evidence

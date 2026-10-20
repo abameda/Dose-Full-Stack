@@ -8,7 +8,11 @@
     "./db": "./src/db.ts",
     "./migrate": "./src/migrate.ts",
     "./stock": "./src/stock.ts",
-    "./catalogue": "./src/catalogue.ts"
+    "./catalogue": "./src/catalogue.ts",
+    "./states": "./src/states.ts",
+    "./audit": "./src/audit.ts",
+    "./pricing": "./src/pricing.ts",
+    "./governorates": "./src/governorates.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
