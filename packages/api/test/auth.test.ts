@@ -10,12 +10,15 @@ import { createAccessVerifier, findActiveStaff } from '../src/auth';
 const TEAM_DOMAIN = 'dose-test.cloudflareaccess.com';
 const AUDIENCE = 'test-access-audience';
 const KID = 'test-key';
+/** What Cloudflare Access puts in `common_name` of a service token's JWT: the token's client ID. */
+const CLIENT_ID = '0123456789abcdef0123456789abcdef.access';
 
 let signingKey: CryptoKey;
 let otherKey: CryptoKey;
 let jwks: ReturnType<typeof createLocalJWKSet>;
 let lookup: (email: string) => Promise<Staff | null>;
 let operations: Staff;
+let serviceToken: Staff;
 
 beforeAll(async () => {
   const pair = await generateKeyPair('RS256');
@@ -30,6 +33,12 @@ beforeAll(async () => {
   if (row === undefined) throw new Error('staff insert returned no row');
   await db.owner.query(`insert into staff (email, name, role, active) values ('gone@example.test', 'Former Staff', 'owner', false)`);
   operations = { id: row.id, email: 'ops@example.test', name: 'Olivia Operations', role: 'operations' };
+  const [service] = await db.owner.query<{ id: string }>(
+    `insert into staff (email, name, role) values ($1, 'Smoke test token', 'owner') returning id`,
+    [CLIENT_ID],
+  );
+  if (service === undefined) throw new Error('staff insert returned no row');
+  serviceToken = { id: service.id, email: CLIENT_ID, name: 'Smoke test token', role: 'owner' };
   lookup = (email) => findActiveStaff(db.app, email);
 });
 
@@ -37,10 +46,18 @@ function verifier(env: ApiDeps['env'] = 'production') {
   return createAccessVerifier({ teamDomain: TEAM_DOMAIN, audience: AUDIENCE, jwks, env, lookup });
 }
 
-type TokenOptions = { email?: string; audience?: string; issuer?: string; expiresAt?: number | string; key?: CryptoKey };
+type TokenOptions = {
+  email?: string;
+  /** Extra claims; a service token has `common_name` and no `email`. */
+  claims?: Record<string, string>;
+  audience?: string;
+  issuer?: string;
+  expiresAt?: number | string;
+  key?: CryptoKey;
+};
 
 function token(o: TokenOptions = {}): Promise<string> {
-  return new SignJWT({ email: o.email ?? 'ops@example.test' })
+  return new SignJWT(o.claims ?? { email: o.email ?? 'ops@example.test' })
     .setProtectedHeader({ alg: 'RS256', kid: KID })
     .setIssuer(o.issuer ?? `https://${TEAM_DOMAIN}`)
     .setAudience(o.audience ?? AUDIENCE)
@@ -114,6 +131,27 @@ test('a valid token without an email is refused', async () => {
     .setExpirationTime('5m')
     .sign(signingKey);
   expect(await verifier()(withToken(noEmail))).toBeNull();
+});
+
+test('a service token (common_name, no email) is the staff member whose identity is its client ID', async () => {
+  expect(await verifier()(withToken(await token({ claims: { common_name: CLIENT_ID } })))).toEqual(serviceToken);
+});
+
+test('a token with both an email and a common_name uses the email', async () => {
+  const both = await token({ claims: { email: 'ops@example.test', common_name: CLIENT_ID } });
+  expect(await verifier()(withToken(both))).toEqual(operations);
+});
+
+test('an empty email falls back to the common_name', async () => {
+  expect(await verifier()(withToken(await token({ claims: { email: '', common_name: CLIENT_ID } })))).toEqual(serviceToken);
+});
+
+test('a service token whose client ID is not staff is refused', async () => {
+  expect(await verifier()(withToken(await token({ claims: { common_name: 'someone-elses.access' } })))).toBeNull();
+});
+
+test('a token with an empty common_name and no email is refused', async () => {
+  expect(await verifier()(withToken(await token({ claims: { common_name: '' } })))).toBeNull();
 });
 
 test('X-Dev-Staff-Email signs in active staff on a local machine only', async () => {

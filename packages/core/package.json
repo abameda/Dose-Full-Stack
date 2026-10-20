@@ -20,13 +20,17 @@
     "./webhooks": "./src/webhooks.ts",
     "./outbox": "./src/outbox.ts",
     "./rules": "./src/rules.ts",
+    "./env-identity": "./src/env-identity.ts",
+    "./staff-admin": "./src/staff-admin.ts",
     "./test-harness": "./test/harness.ts",
     "./test-factories": "./test/factories.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "rules:check": "node scripts/check-rules.ts",
-    "seed": "tsx seed/run.ts"
+    "seed": "tsx seed/run.ts",
+    "env:identity": "tsx scripts/env-identity.ts",
+    "staff:add": "tsx scripts/staff-add.ts"
   },
   "dependencies": {
     "@dose/contract": "workspace:*",

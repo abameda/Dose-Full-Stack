@@ -42,6 +42,7 @@ describe('the migration', () => {
       { name: '0003_orders.sql' },
       { name: '0004_webhooks_outbox.sql' },
       { name: '0005_staff.sql' },
+      { name: '0006_env_identity.sql' },
     ]);
     await expect(app.query(`select 1 from schema_migrations`)).rejects.toThrow(/permission denied/);
   });
@@ -107,6 +108,7 @@ describe('migrate', () => {
       { name: '0003_orders.sql' },
       { name: '0004_webhooks_outbox.sql' },
       { name: '0005_staff.sql' },
+      { name: '0006_env_identity.sql' },
     ]);
   });
 });

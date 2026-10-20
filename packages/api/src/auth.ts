@@ -1,6 +1,6 @@
 import { ROLES, type Staff } from '@dose/contract';
 import type { Tx } from '@dose/core/db';
-import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jose';
+import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import type { ApiDeps } from './app';
 
 /** The header Cloudflare Access adds to every request it lets through. */
@@ -18,15 +18,19 @@ export interface AccessVerifierOptions {
   /** The keys to verify with. Defaults to `https://<teamDomain>/cdn-cgi/access/certs`; tests pass local keys. */
   jwks?: JWTVerifyGetKey;
   env: ApiDeps['env'];
-  /** The active staff member with this email, or null. */
-  lookup: (email: string) => Promise<Staff | null>;
+  /** The active staff member with this identity (an email, or an Access service token's client ID), or null. */
+  lookup: (identity: string) => Promise<Staff | null>;
 }
 
 /**
  * Who is asking, as Cloudflare Access proved it: the `Cf-Access-Jwt-Assertion` token is verified
- * against the team's keys, this application's audience and the team's issuer, and its `email` is
- * looked up among active staff. Any token that fails verification is no staff (null). Only when
- * `env` is `local` is `X-Dev-Staff-Email` accepted instead; in every other env it is ignored.
+ * against the team's keys, this application's audience and the team's issuer, and the identity it
+ * proves is looked up among active staff. A person's token proves their `email`; an Access service
+ * token (used by automation) carries the token's client ID in `common_name` and has no email, so
+ * `common_name` is the identity when there is no email. Staff are added under either (`staff.email`
+ * holds the client ID). Any token that fails verification, or proves neither, is no staff (null).
+ * Only when `env` is `local` is `X-Dev-Staff-Email` accepted instead; in every other env it is
+ * ignored.
  */
 export function createAccessVerifier(o: AccessVerifierOptions): (req: Request) => Promise<Staff | null> {
   const issuer = `https://${o.teamDomain}`;
@@ -41,22 +45,30 @@ export function createAccessVerifier(o: AccessVerifierOptions): (req: Request) =
 
     const token = req.headers.get(ACCESS_HEADER);
     if (token === null || token === '') return null;
-    let email: unknown;
+    let identity: string | null;
     try {
       const { payload } = await jwtVerify(token, jwks, { audience: o.audience, issuer, algorithms: ACCESS_ALGORITHMS });
-      email = payload['email'];
+      identity = identityOf(payload);
     } catch (error) {
       // jose's own errors (a bad, expired or foreign token; no matching key; a key fetch that timed
       // out) mean not signed in. Anything else is a fault and becomes a 500.
       if (error instanceof errors.JOSEError) return null;
       throw error;
     }
-    if (typeof email !== 'string' || email === '') return null;
-    return o.lookup(email);
+    return identity === null ? null : o.lookup(identity);
   };
 }
 
-/** The active staff member with this email (compared without regard to case), or null. */
+/** The `email` of a person's token, else the `common_name` (client ID) of a service token, else null. */
+function identityOf(payload: JWTPayload): string | null {
+  for (const claim of ['email', 'common_name']) {
+    const value = payload[claim];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return null;
+}
+
+/** The active staff member with this identity (an email, or a service token's client ID; compared without regard to case), or null. */
 export async function findActiveStaff(db: Tx, email: string): Promise<Staff | null> {
   const [row] = await db.query<{ id: string; email: string; name: string; role: string }>(
     `select id, email::text as email, name, role from staff where email = $1::citext and active`,

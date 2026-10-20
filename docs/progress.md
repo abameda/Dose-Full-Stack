@@ -31,3 +31,7 @@
 
 - Decision 0008: DÖSE gets its own Cloudflare account (owner creating it, Workers paid plan). **Waiting on the owner:** the DÖSE Cloudflare account ID, and Neon and Fly.io CLI sign-ins, before Task 17.
 - Decision 0009: Milestone 1 runs on free tiers (Cloudflare Free, Neon Free, Fly.io trial); paid plans are decided at launch. Creating the DÖSE Cloudflare account is free.
+
+## 2026-10-21
+
+- Task 17a (environment code, part 1): migration 0006 adds `env_identity` (one row naming the database, read-only to `dose_app`, a new exemption in decision 0007) and `diag_writes`; `pnpm env:identity` and `pnpm staff:add` (owner CLIs behind the same local/`--allow-remote` guard as the seed; staff may be an email or an Access service-token client ID) set them; `createAccessVerifier` accepts an Access service token as an identity (`common_name`, when there is no email); and outside production `GET /api/_diag/db-identity` and `GET /api/_diag/read-your-writes` (20 write-then-read rounds through Hyperdrive, with the request colo and the Worker placement) answer active staff only, privately, from `apps/web/src/diag.ts`.

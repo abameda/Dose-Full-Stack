@@ -14,6 +14,8 @@
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test",
     "seed": "pnpm --filter @dose/core run seed",
+    "env:identity": "pnpm --filter @dose/core run env:identity",
+    "staff:add": "pnpm --filter @dose/core run staff:add",
     "e2e": "playwright test",
     "lhci": "lhci autorun"
   },

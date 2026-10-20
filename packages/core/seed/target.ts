@@ -7,7 +7,13 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
  * staging branches); `--fresh` drops a database, so it is refused anywhere but here.
  */
 export function checkSeedTarget(target: string, flags: { allowRemote: boolean; fresh: boolean }): { local: boolean } {
-  const host = new URL(target).hostname;
+  let host: string;
+  try {
+    host = new URL(target).hostname;
+  } catch {
+    // Not the URL itself: it holds the owner password.
+    throw new Error('--target is not a valid database URL');
+  }
   const local = LOCAL_HOSTS.has(host);
   if (!local && flags.fresh) throw new Error(`--fresh only works on a local database, not ${host}`);
   if (!local && !flags.allowRemote) {

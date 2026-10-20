@@ -30,3 +30,9 @@ describe('checkSeedTarget', () => {
     expect(() => checkSeedTarget(lookalike, { allowRemote: false, fresh: false })).toThrow(/--allow-remote/);
   });
 });
+
+describe('checkSeedTarget with a bad URL', () => {
+  it('refuses it without repeating it (the URL holds the password)', () => {
+    expect(() => checkSeedTarget('not a url with-secret', { allowRemote: true, fresh: false })).toThrow('--target is not a valid database URL');
+  });
+});
