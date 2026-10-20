@@ -40,7 +40,7 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | @axe-core/playwright | 4.13.0 | Accessibility checks in `e2e/a11y.spec.ts` (root dev dependency). Published 2026-08-11; 4.14.0 is newer than two weeks. |
 | pg, @types/pg (root dev dependencies) | 8.23.1 | The e2e specs change a live price through the owner role (`e2e/support/db.ts`); same versions as `@dose/core`. |
 | @lhci/cli | 0.15.1 | Lighthouse CI (`pnpm lhci`, `lighthouserc.cjs`): the speed and accessibility gate for the Direction 0 product page, three mobile-emulation runs per URL, median asserted. Latest release (published 2025-06-25); it bundles its own Lighthouse and uses the Chrome installed on the machine (the GitHub Ubuntu runner has one). Root dev dependency. |
-| sharp | 0.35.5 | The seed re-encodes every product image to a 1200x1500 JPEG (dev dependency of `@dose/core`, used by `seed/` only). Published 2026-09-27. |
+| sharp | 0.35.5 | The seed re-encodes every product image to a 1200x1500 JPEG (dev dependency of `@dose/core`, used by `seed/` only). Published 2026-09-27. Also forced (pnpm `overrides`) over the older sharp that miniflare, inside wrangler, depends on, because `pnpm audit --prod --audit-level high` flags that one (GHSA-wq5f-xc86-pv6w, fixed in 0.35.5); the app never uses miniflare’s image binding. |
 | tsx | 4.23.15 | Also runs `pnpm seed` (`packages/core/seed/run.ts`): the seed imports `stock.ts`, whose parameter properties Node's type stripping cannot run. |
 | Postgres (local and CI) | 18 (`postgres:18` image) | `docker-compose.yml` for local development (port 54329) and the CI service container. Neon runs the production branches; the version is confirmed when the Neon project is created. |
 

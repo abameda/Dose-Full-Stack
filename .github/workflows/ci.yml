@@ -52,13 +52,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # TEMPORARY DEBUG: whole-history gitleaks scan honouring .gitleaksignore.
-      - name: Debug gitleaks full history
-        if: always()
-        run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar xz gitleaks
-          ./gitleaks detect --redact --no-banner --report-format json --report-path r.json --exit-code 0 || true
-          node -e "console.log(\"::warning title=gitleaks-history::findings=\" + require(\"./r.json\").length)"
       - run: pnpm audit --prod --audit-level high
 
   # The same Postgres service, the real Worker (`astro build`, then `wrangler dev` with local R2 and
