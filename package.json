@@ -14,11 +14,13 @@
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test",
     "seed": "pnpm --filter @dose/core run seed",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "lhci": "lhci autorun"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@eslint/js": "10.0.1",
+    "@lhci/cli": "0.15.1",
     "@playwright/test": "1.63.0",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
