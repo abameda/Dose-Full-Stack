@@ -38,6 +38,7 @@ describe('the migration', () => {
     const { app, owner } = await withTestDb();
     expect(await owner.query<{ name: string }>(`select name from schema_migrations order by name`)).toEqual([
       { name: '0001_roles_and_audit.sql' },
+      { name: '0002_catalogue_and_stock.sql' },
     ]);
     await expect(app.query(`select 1 from schema_migrations`)).rejects.toThrow(/permission denied/);
   });
@@ -98,6 +99,7 @@ describe('migrate', () => {
     ]);
     expect(await owner.query<{ name: string }>(`select name from schema_migrations order by name`)).toEqual([
       { name: '0001_roles_and_audit.sql' },
+      { name: '0002_catalogue_and_stock.sql' },
       { name: '0002_ok.sql' },
     ]);
   });

@@ -22,6 +22,7 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | @types/node | 24.19.2 | Node types for the boundaries test and script. TypeScript 6 no longer loads `@types` implicitly, so `test/boundaries/tsconfig.json` lists `types: ["node"]`. Latest 24.x, matching Node 24. |
 | pg | 8.23.1 | Postgres driver for `@dose/core` (`createPoolDb` on Node, `createRequestDb` on Workers). Released 2026-09-30. |
 | @types/pg | 8.23.1 | Types for `pg`; dev dependency of `@dose/core`. |
+| fast-check | 4.10.2 | Property-based tests for the stock ledger (`@dose/core`, dev dependency). Published 2026-09-19, more than two weeks before it was added. |
 | Postgres (local and CI) | 18 (`postgres:18` image) | `docker-compose.yml` for local development (port 54329) and the CI service container. Neon runs the production branches; the version is confirmed when the Neon project is created. |
 
 TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` and `moduleResolution: Bundler` in `tsconfig.base.json`. Packages extend it. Source imports are extensionless.
