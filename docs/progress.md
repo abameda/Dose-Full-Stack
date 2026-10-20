@@ -30,3 +30,4 @@
 - 2026-10-20, review fix (test suite): `dose_test_template` is built once per Vitest run instead of once per database project (shared, reference-counted global setup), and `sequence.groupOrder` runs core, then api, then web, after the projects that need no database, so one test file at a time talks to Postgres (measured: core 7.8-110.8 s, api 111.3-117.3 s, web 117.8-119.7 s). `pnpm check` green with 599 tests.
 
 - Decision 0008: DÖSE gets its own Cloudflare account (owner creating it, Workers paid plan). **Waiting on the owner:** the DÖSE Cloudflare account ID, and Neon and Fly.io CLI sign-ins, before Task 17.
+- Decision 0009: Milestone 1 runs on free tiers (Cloudflare Free, Neon Free, Fly.io trial); paid plans are decided at launch. Creating the DÖSE Cloudflare account is free.
