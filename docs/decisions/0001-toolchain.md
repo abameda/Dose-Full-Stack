@@ -23,6 +23,10 @@ Milestone 1 starts from an empty repository. Every later task inherits the toolc
 | pg | 8.23.1 | Postgres driver for `@dose/core` (`createPoolDb` on Node, `createRequestDb` on Workers). Released 2026-09-30. |
 | @types/pg | 8.23.1 | Types for `pg`; dev dependency of `@dose/core`. |
 | fast-check | 4.10.2 | Property-based tests for the stock ledger (`@dose/core`, dev dependency). Published 2026-09-19, more than two weeks before it was added. |
+| zod | 4.6.5 | Request-body schemas in `@dose/contract` (trust boundary). 4.6.6 and 4.6.7 were published less than two weeks before Task 10, so 4.6.5 (2026-09-13) is used. |
+| hono | 4.13.13 | HTTP app in `@dose/api`. Latest stable 4.x (published 2026-10-04); the 5.0.0 release candidates are not stable. |
+| @hono/node-server | 2.1.3 | Serves the Hono app on Node in `apps/node-control`. 2.1.4 and 2.1.5 were published less than two weeks before Task 10; 2.1.3 (2026-09-29) peers on `hono ^4`. |
+| tsx | 4.23.15 | Runs `apps/node-control/src/server.ts` directly (the workspace sources import extensionless, which Node alone cannot load). Published 2026-09-20. |
 | Postgres (local and CI) | 18 (`postgres:18` image) | `docker-compose.yml` for local development (port 54329) and the CI service container. Neon runs the production branches; the version is confirmed when the Neon project is created. |
 
 TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` and `moduleResolution: Bundler` in `tsconfig.base.json`. Packages extend it. Source imports are extensionless.
@@ -30,6 +34,8 @@ TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOption
 Workspace globs are `packages/*`, `directions/*`, `apps/*`.
 
 Code boundaries (`.dependency-cruiser.cjs`) are checked by dependency-cruiser, which cannot read `.astro` files (its supported extensions are ts, tsx, cts, mts, js, vue, svelte, livescript and coffee). `scripts/astro-imports.mjs` therefore scans the import specifiers in every `.astro` file under `packages/`, `directions/` and `apps/` and judges them against the same rules, so `pnpm boundaries` covers Astro frontmatter and `<script>` imports too. It is a text scan: it reports import-looking lines inside comments, and it does not follow `import.meta.glob` patterns.
+
+`esbuild` (a dependency of `tsx`) has an install script that only optimises its launcher; `pnpm-workspace.yaml` sets `allowBuilds: { esbuild: false }` so `pnpm install` does not fail on the unreviewed script. The platform binary arrives as an optional dependency regardless.
 
 Root scripts: `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm test`, and `pnpm check`, which chains all four.
 

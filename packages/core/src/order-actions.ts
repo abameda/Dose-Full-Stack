@@ -23,11 +23,11 @@ export const CANCEL_REASONS = [
   'confirmation_window_expired',
   'other',
 ] as const;
-/** Moves to `@dose/contract` with the admin API (Task 10), as `Lang` does. */
+/** Moves to `@dose/contract` with the admin API (Task 11). */
 export type CancelReason = (typeof CANCEL_REASONS)[number];
 
 export const CONFIRM_METHODS = ['whatsapp', 'phone'] as const;
-/** Moves to `@dose/contract` with the admin API (Task 10). */
+/** Moves to `@dose/contract` with the admin API (Task 11). */
 export type ConfirmMethod = (typeof CONFIRM_METHODS)[number];
 
 export type ActionOutcome =

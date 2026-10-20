@@ -14,3 +14,8 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/utils@8.72.0'
   - '@typescript-eslint/visitor-keys@8.72.0'
   - typescript-eslint@8.72.0
+
+# esbuild (pulled in by tsx, which runs apps/node-control) has an install script that only
+# optimises its launcher; the platform binary arrives as an optional dependency without it.
+allowBuilds:
+  esbuild: false

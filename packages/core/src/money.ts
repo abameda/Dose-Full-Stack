@@ -1,5 +1,4 @@
-/** Storefront language. Moves to `@dose/contract` in Task 10. */
-export type Lang = 'ar' | 'en';
+import type { Lang } from '@dose/contract';
 
 const PIASTRES_PER_POUND = 100;
 

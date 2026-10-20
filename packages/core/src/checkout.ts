@@ -1,7 +1,7 @@
+import type { Lang } from '@dose/contract';
 import { validateAddress, type AddressInput } from './address';
 import { writeAudit } from './audit';
 import type { Db, Tx } from './db';
-import type { Lang } from './money';
 import { normalisePhone } from './phone';
 import { MAX_LINES, MAX_QUANTITY, priceBag } from './pricing';
 import { InsufficientStock, reserveStock, type Actor } from './stock';
