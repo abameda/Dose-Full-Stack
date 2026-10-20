@@ -25,6 +25,8 @@ TypeScript is configured with `strict`, `noUncheckedIndexedAccess`, `exactOption
 
 Workspace globs are `packages/*`, `directions/*`, `apps/*`.
 
+Code boundaries (`.dependency-cruiser.cjs`) are checked by dependency-cruiser, which cannot read `.astro` files (its supported extensions are ts, tsx, cts, mts, js, vue, svelte, livescript and coffee). `scripts/astro-imports.mjs` therefore scans the import specifiers in every `.astro` file under `packages/`, `directions/` and `apps/` and judges them against the same rules, so `pnpm boundaries` covers Astro frontmatter and `<script>` imports too. It is a text scan: it reports import-looking lines inside comments, and it does not follow `import.meta.glob` patterns.
+
 Root scripts: `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm test`, and `pnpm check`, which chains all four.
 
 CI (`.github/workflows/ci.yml`) runs on pull requests and on every push (so a branch is checked before its pull request exists): install with a frozen lockfile, `pnpm check`, gitleaks, and `pnpm audit --prod --audit-level high`.

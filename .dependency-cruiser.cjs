@@ -10,6 +10,10 @@
  * `test/boundaries/fixtures/bad-direction` is treated as a direction by rule 1 so the
  * test can prove the rule fires. `pnpm boundaries` scans packages, directions and apps
  * only, so the fixture never reaches the real build.
+ *
+ * dependency-cruiser cannot read .astro files, so scripts/astro-imports.mjs scans their import
+ * specifiers against these same rules (only `path` and `pathNot` on `from`/`to` are supported
+ * there; scripts/astro-imports.mjs throws on any other key, so a new rule cannot silently skip it).
  */
 
 const nm = '(^|/)node_modules/';
