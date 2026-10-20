@@ -1,0 +1,32 @@
+// The one Worker that serves the storefront, the studio, the admin and the API (Milestone 1).
+// `astro build` writes the deployable config (dist/server/wrangler.json) from this file.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dose-web",
+  // The Astro request handler plus the cron's scheduled handler.
+  "main": "./src/worker-scheduled.ts",
+  "compatibility_date": "2026-10-01",
+  // `pg` needs Node's net, tls and crypto (belief B10).
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // Placeholder until the Hyperdrive config exists (Task 17); `wrangler dev` never reads it.
+      "id": "00000000000000000000000000000000",
+      // Local Postgres of docker-compose.yml as the application role; fixed, dev-only values.
+      // Override with CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE (the e2e tests do).
+      "localConnectionString": "postgres://dose_app:dose_app_local@127.0.0.1:54329/dose"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "dose-media" }],
+  "vars": {
+    // local | test | preview | staging | production. Only `local` accepts X-Dev-Staff-Email.
+    "ENVIRONMENT": "local",
+    // Cloudflare Access (Task 17/18). Empty on a developer machine, where nothing sits in front.
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  },
+  // Expire stale cash-on-delivery orders, then drain the outbox.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true }
+}

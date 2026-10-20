@@ -15,7 +15,14 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/visitor-keys@8.72.0'
   - typescript-eslint@8.72.0
 
-# esbuild (pulled in by tsx, which runs apps/node-control) has an install script that only
-# optimises its launcher; the platform binary arrives as an optional dependency without it.
+# esbuild (pulled in by tsx and wrangler) and workerd (the Workers runtime, pulled in by wrangler)
+# have install scripts that only optimise their launchers; the platform binaries arrive as
+# optional dependencies without them.
 allowBuilds:
   esbuild: false
+  workerd: false
+
+# @astrojs/cloudflare asks for @cloudflare/vite-plugin ^1.53.0; pin the release built against the
+# pinned wrangler (4.147.0), so the plugin and the CLI run the same workerd and miniflare.
+overrides:
+  '@cloudflare/vite-plugin': 1.62.5

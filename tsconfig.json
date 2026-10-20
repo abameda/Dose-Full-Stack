@@ -1,0 +1,8 @@
+{
+  // Root-level TypeScript outside the workspace packages: the Playwright config and the e2e specs.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "e2e"]
+}

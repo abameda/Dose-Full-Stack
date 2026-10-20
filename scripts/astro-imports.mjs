@@ -89,9 +89,12 @@ export function violationsInSource(file, source, forbidden) {
 }
 
 async function astroFilesUnder(baseDir, root) {
-  const entries = await readdir(posix.join(baseDir, root), { recursive: true });
+  const dir = posix.join(baseDir, root);
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  // Files only: Astro generates a `.astro/` directory (types) next to every app.
   return entries
-    .map((entry) => posix.join(root, entry.replaceAll('\\', '/')))
+    .filter((entry) => entry.isFile())
+    .map((entry) => posix.join(root, posix.relative(dir, posix.join(entry.parentPath.replaceAll('\\', '/'), entry.name))))
     .filter((file) => file.endsWith('.astro') && !ALWAYS_SKIPPED.test(file))
     .sort();
 }

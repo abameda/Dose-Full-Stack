@@ -1,0 +1,23 @@
+{
+  "name": "@dose/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "astro build",
+    "dev": "astro dev"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "14.3.3",
+    "@dose/api": "workspace:*",
+    "@dose/contract": "workspace:*",
+    "@dose/core": "workspace:*",
+    "astro": "7.3.5",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261005.1",
+    "wrangler": "4.147.0"
+  }
+}

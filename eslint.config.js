@@ -7,6 +7,9 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.wrangler/**',
+      '**/.astro/**',
+      'test-results/**',
+      'playwright-report/**',
       'graphify-out/**',
       // Deliberately invalid input for the boundaries test; it is never compiled or linted.
       'test/boundaries/fixtures/**',

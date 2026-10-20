@@ -1,0 +1,17 @@
+---
+// The home page of each language. Task 13 replaces the body with Direction 0's home page.
+import Shell from '../../layouts/Shell.astro';
+
+export const prerender = false;
+
+const lang = Astro.locals.lang;
+if (lang === null || Astro.params.lang !== lang) {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<Shell title="DÖSE">
+  <main>
+    <h1>DÖSE</h1>
+  </main>
+</Shell>

@@ -4,5 +4,5 @@
     // scripts/check-rules.ts is run by Node itself, which needs `.ts` in the import paths.
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "test", "scripts", "vitest.config.ts"]
+  "include": ["src", "test", "scripts", "seed", "vitest.config.ts"]
 }

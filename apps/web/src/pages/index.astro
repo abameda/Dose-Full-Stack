@@ -1,0 +1,12 @@
+---
+// `/` sends each visitor to the storefront in the language their browser prefers.
+import { preferredLang } from '../lang';
+
+export const prerender = false;
+
+const lang = preferredLang(Astro.request.headers.get('accept-language'));
+return new Response(null, {
+  status: 302,
+  headers: { location: `/${lang}`, vary: 'Accept-Language', 'cache-control': 'private, no-cache' },
+});
+---
