@@ -123,14 +123,24 @@ export interface SeedResult {
   stock: Record<string, 'applied' | 'duplicate'>;
 }
 
+export interface SeedOptions {
+  /** Write `SEED_STAFF`. Only for a database on this machine: the test addresses never leave local. */
+  localStaff: boolean;
+  imagesDir?: URL;
+}
+
 /**
- * Brings the catalogue, opening stock and local staff in line with this file. Connect as the
- * owner role (`dose_owner`). Images are re-encoded and uploaded first (their keys are content
- * hashes, so an upload that is never referenced is harmless); every row is then written in one
- * transaction. Running it again changes nothing: products, variants and staff are matched by
- * slug, SKU and email, images by key, and the opening stock is received under `seed:<sku>`.
+ * Brings the catalogue, opening stock and (on a local database) the local staff in line with this
+ * file. Connect as the owner role (`dose_owner`). Images are re-encoded and uploaded first (their
+ * keys are content hashes, so an upload that is never referenced is harmless); every row is then
+ * written in one transaction. Running it again changes nothing: products, variants and staff are
+ * matched by slug, SKU and email, images by key, and the opening stock is received under `seed:<sku>`.
  */
-export async function seedCatalogue(owner: Db, media: MediaStore, imagesDir: URL = SEED_IMAGES_DIR): Promise<SeedResult> {
+export async function seedCatalogue(
+  owner: Db,
+  media: MediaStore,
+  { localStaff, imagesDir = SEED_IMAGES_DIR }: SeedOptions,
+): Promise<SeedResult> {
   const images: SeedResult['images'] = [];
   for (const product of SEED_PRODUCTS) {
     for (const image of product.images) {
@@ -155,7 +165,7 @@ export async function seedCatalogue(owner: Db, media: MediaStore, imagesDir: URL
         actor: SEED_ACTOR,
       });
     }
-    for (const member of SEED_STAFF) {
+    for (const member of localStaff ? SEED_STAFF : []) {
       await tx.query(
         `insert into staff (email, name, role) values ($1, $2, $3)
          on conflict (email) do update set name = excluded.name, role = excluded.role, active = true`,

@@ -1,21 +1,25 @@
-// `pnpm seed --target <ownerUrl> --media local|r2 [--bucket <name>] [--fresh]`
+// `pnpm seed --target <ownerUrl> --media local|r2 [--bucket <name>] [--fresh] [--allow-remote]`
 //
 // Migrates the target database, then seeds it (seed/catalogue.ts) and uploads the images.
-//   --target  Postgres URL of the owner role (`dose_owner`) for the database to seed.
-//   --media   `local`: the local R2 of `wrangler dev` (apps/web/.wrangler/state);
-//             `r2`: the real bucket, through `wrangler r2 object put --remote` (needs a
-//             Cloudflare login, so it only runs where one exists, never on a developer machine
-//             in Milestone 1).
-//   --bucket  the R2 bucket name (default `dose-media`, as in apps/web/wrangler.jsonc).
-//   --fresh   drops and recreates the target database first. Refused unless it is on this machine.
+//   --target        Postgres URL of the owner role (`dose_owner`) for the database to seed.
+//   --media         `local`: the local R2 of `wrangler dev` (apps/web/.wrangler/state);
+//                   `r2`: the real bucket, through `wrangler r2 object put --remote` (needs a
+//                   Cloudflare login, so it only runs where one exists, never on a developer
+//                   machine in Milestone 1).
+//   --bucket        the R2 bucket name (default `dose-media`, as in apps/web/wrangler.jsonc).
+//   --fresh         drops and recreates the target database first. Refused unless it is on this machine.
+//   --allow-remote  seeds a database that is not on this machine (a preview or staging branch, never
+//                   production, which holds an empty migrated database and nothing else). Without it
+//                   a non-local target is refused. The local `@example.test` staff are written only
+//                   to a local database, flag or not.
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
 import { createRequestDb } from '../src/db';
 import { migrate } from '../src/migrate';
 import { seedCatalogue, type MediaStore } from './catalogue';
+import { checkSeedTarget } from './target';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 /** Relative to apps/web, where `wrangler dev` runs; playwright.config.ts passes the same path. */
 const LOCAL_PERSIST_DIR = '.wrangler/state';
 
@@ -26,7 +30,6 @@ function quoteIdent(name: string): string {
 /** Drops and recreates the database named in `target`, connected to `postgres` on the same server. */
 async function recreateDatabase(target: string): Promise<void> {
   const url = new URL(target);
-  if (!LOCAL_HOSTS.has(url.hostname)) throw new Error(`--fresh only works on a local database, not ${url.hostname}`);
   const name = decodeURIComponent(url.pathname.slice(1));
   if (name === '' || name === 'postgres') throw new Error('--fresh needs a database name other than postgres in --target');
   url.pathname = '/postgres';
@@ -70,11 +73,13 @@ const { values } = parseArgs({
     media: { type: 'string' },
     bucket: { type: 'string', default: 'dose-media' },
     fresh: { type: 'boolean', default: false },
+    'allow-remote': { type: 'boolean', default: false },
   },
 });
 
-const { target, media, bucket, fresh } = values;
+const { target, media, bucket, fresh, 'allow-remote': allowRemote } = values;
 if (target === undefined || target === '') throw new Error('--target <owner database URL> is required');
+const { local } = checkSeedTarget(target, { allowRemote, fresh });
 if (media !== 'local' && media !== 'r2') throw new Error('--media must be local or r2');
 // R2's own naming rule; it also keeps the name safe on the Windows command line above.
 if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) throw new Error('--bucket is not a valid R2 bucket name');
@@ -86,7 +91,8 @@ console.log(`seed: ${String(applied.length)} migration(s) applied`);
 const store = wranglerMedia(bucket, media === 'local' ? ['--local', '--persist-to', LOCAL_PERSIST_DIR] : ['--remote']);
 const db = createRequestDb(target);
 try {
-  const result = await seedCatalogue(db, store);
+  const result = await seedCatalogue(db, store, { localStaff: local });
+  if (!local) console.log('seed: not a local database, so no local staff were written');
   for (const image of result.images) console.log(`seed: stored ${image.key}`);
   for (const [sku, outcome] of Object.entries(result.stock)) {
     console.log(`seed: ${sku} opening stock ${outcome === 'applied' ? 'received' : 'already received'}`);

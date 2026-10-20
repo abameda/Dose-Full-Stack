@@ -61,7 +61,7 @@ describe('prepareImage', () => {
 describe('seedCatalogue', () => {
   it('publishes Paradise and Blanc with a 50 ml full variant, images and opening stock', async () => {
     const db = await withTestDb();
-    await seedCatalogue(db.owner, memoryMedia());
+    await seedCatalogue(db.owner, memoryMedia(), { localStaff: false });
 
     const products = await listPublishedProducts(db.app);
     expect(products.map((p) => p.slug).sort()).toEqual(['blanc', 'paradise']);
@@ -81,7 +81,7 @@ describe('seedCatalogue', () => {
   it('stores every image as a 1200x1500 JPEG under products/<slug>/<sha256>.jpg', async () => {
     const db = await withTestDb();
     const media = memoryMedia();
-    await seedCatalogue(db.owner, media);
+    await seedCatalogue(db.owner, media, { localStaff: false });
 
     const rows = await db.owner.query<{ slug: string; r2_key: string }>(
       `select p.slug, i.r2_key from product_images i join products p on p.id = i.product_id order by p.slug, i.position`,
@@ -98,9 +98,9 @@ describe('seedCatalogue', () => {
     }
   });
 
-  it('adds an owner and an operations member with test addresses', async () => {
+  it('adds an owner and an operations member with test addresses on a local database', async () => {
     const db = await withTestDb();
-    await seedCatalogue(db.owner, memoryMedia());
+    await seedCatalogue(db.owner, memoryMedia(), { localStaff: true });
     const staff = await db.owner.query<{ email: string; role: string; active: boolean }>(
       `select email::text as email, role, active from staff order by role`,
     );
@@ -108,6 +108,12 @@ describe('seedCatalogue', () => {
       { email: 'operations@example.test', role: 'operations', active: true },
       { email: 'owner@example.test', role: 'owner', active: true },
     ]);
+  });
+
+  it('writes no staff outside a local database', async () => {
+    const db = await withTestDb();
+    await seedCatalogue(db.owner, memoryMedia(), { localStaff: false });
+    expect(await db.owner.query(`select email from staff`)).toEqual([]);
   });
 
   it('changes nothing when run again', async () => {
@@ -122,9 +128,9 @@ describe('seedCatalogue', () => {
                 (select json_agg(st order by st.email) from staff st) as staff`,
       );
 
-    const first = await seedCatalogue(db.owner, memoryMedia());
+    const first = await seedCatalogue(db.owner, memoryMedia(), { localStaff: true });
     const before = await snapshot();
-    const second = await seedCatalogue(db.owner, memoryMedia());
+    const second = await seedCatalogue(db.owner, memoryMedia(), { localStaff: true });
 
     expect(await snapshot()).toEqual(before);
     expect(Object.values(first.stock)).toEqual(['applied', 'applied']);

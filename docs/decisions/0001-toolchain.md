@@ -64,7 +64,7 @@ How the Workers toolchain fits together in these versions (read from the adapter
 - Locally, Hyperdrive connects to `localConnectionString`; the `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` environment variable overrides it (the e2e tests point it at `dose_e2e`).
 - `pnpm-workspace.yaml` sets `allowBuilds: { workerd: false }` for the same reason as esbuild below.
 
-Root scripts: `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm test`, and `pnpm check`, which chains all four. `pnpm seed --target <ownerUrl> --media local|r2 [--fresh]` migrates and seeds a database; `pnpm e2e` runs Playwright against the built Worker (needs `docker compose up -d`). The root `tsconfig.json` covers `playwright.config.ts` and `e2e/`.
+Root scripts: `pnpm typecheck`, `pnpm lint`, `pnpm boundaries`, `pnpm test`, and `pnpm check`, which chains all four. `pnpm seed --target <ownerUrl> --media local|r2 [--fresh] [--allow-remote]` migrates and seeds a database (a non-local target needs `--allow-remote`, and only a local one gets the `@example.test` staff); `pnpm e2e` runs Playwright against the built Worker (needs `docker compose up -d`). The root `tsconfig.json` covers `playwright.config.ts` and `e2e/`.
 
 CI (`.github/workflows/ci.yml`) runs on pull requests and on every push (so a branch is checked before its pull request exists): install with a frozen lockfile, `pnpm check`, gitleaks, and `pnpm audit --prod --audit-level high`.
 
