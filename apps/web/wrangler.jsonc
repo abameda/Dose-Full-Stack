@@ -20,8 +20,11 @@
   ],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "dose-media" }],
   "vars": {
-    // local | test | preview | staging | production. Only `local` accepts X-Dev-Staff-Email.
-    "ENVIRONMENT": "local",
+    // local | test | preview | staging | production. Only `local` accepts X-Dev-Staff-Email, so
+    // the checked-in default fails closed: a deploy without an override is `production`, which
+    // refuses to start the API without the Access vars below. Opt into `local` per run: e2e
+    // passes `--var ENVIRONMENT:local`; for `astro dev` copy .dev.vars.example to .dev.vars.
+    "ENVIRONMENT": "production",
     // Cloudflare Access (Task 17/18). Empty on a developer machine, where nothing sits in front.
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": ""

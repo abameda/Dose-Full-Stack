@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) for `pnpm --filter @dose/web dev` on a developer machine.
+# wrangler.jsonc defaults ENVIRONMENT to production; `local` accepts X-Dev-Staff-Email and must
+# never reach a deployed Worker. The e2e run passes `--var ENVIRONMENT:local` instead.
+ENVIRONMENT=local
