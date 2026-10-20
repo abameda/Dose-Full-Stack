@@ -116,6 +116,21 @@ for (const lang of LANGS) {
       expect(orders[0]?.number).toBe(orderNumberFromUrl(page.url()));
     });
 
+    test('a quantity changed in the bag prices the checkout again', async ({ page }) => {
+      await seedBag(page, [{ sku: PARADISE_SKU, quantity: 1 }]);
+      await page.goto(`/${lang}/checkout`);
+      await hydrated(page);
+      await expect(page.locator('bdi', { hasText: formatEgp(150_000 + DELIVERY_FEE, lang) })).toBeVisible();
+
+      await page.locator(bagButton(1)).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: fill(s.increaseQuantity, { name: '' }).trim() }).click();
+      await expect(dialog.getByText(fill(s.quantityOf, { quantity: 2 }))).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      await expect(page.locator('bdi', { hasText: formatEgp(2 * 150_000 + DELIVERY_FEE, lang) })).toBeVisible();
+    });
+
     test('a line that ran out is marked and can be removed', async ({ page }) => {
       // The API answers as it does when the last unit goes between pricing and ordering.
       await page.route('**/api/checkout', (route) =>

@@ -4,7 +4,7 @@ import { Button, Field, LinkButton } from '@dose/ui';
 import { useEffect, useRef, useState, type ChangeEvent, type SyntheticEvent } from 'react';
 import { fill, t } from './i18n';
 import { ShopApiError, shopClientFor } from './shop-client';
-import { skuKey, useBag } from './use-bag';
+import { bagKey, useBag } from './use-bag';
 
 export type GovernorateOption = { code: string; name: string };
 
@@ -89,9 +89,11 @@ export function CheckoutForm({ lang, direction, surface = 'storefront', governor
   const form = useRef<HTMLFormElement>(null);
   const submittingNow = useRef(false);
   const focusFirstError = useRef(false);
-  const key = skuKey(lines);
+  // Quantities count: the summary shows the API's line totals, so a quantity changed in the bag
+  // drawer must price the bag again.
+  const key = bagKey(lines);
 
-  // Price the bag when the form opens, and again when the items or the governorate change.
+  // Price the bag when the form opens, and again when the items, their quantities or the governorate change.
   useEffect(() => {
     if (!ready || key === '' || placed) return undefined;
     let current = true;

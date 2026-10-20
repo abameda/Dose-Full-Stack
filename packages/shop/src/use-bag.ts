@@ -22,3 +22,11 @@ export function skuKey(lines: readonly BagLine[]): string {
     .sort()
     .join('|');
 }
+
+/** A stable key for the bag's contents: it changes when a line is added or removed, or a quantity changes. */
+export function bagKey(lines: readonly BagLine[]): string {
+  return lines
+    .map((line) => `${line.sku}x${String(line.quantity)}`)
+    .sort()
+    .join('|');
+}
