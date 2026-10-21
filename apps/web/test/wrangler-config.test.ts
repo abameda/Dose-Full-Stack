@@ -133,11 +133,11 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
 
 describe('the proof-of-concept settings (Task 19)', () => {
   test('only poc has the container URL (the Fly.io app)', () => {
-    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: '7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec', POC_CONTAINER_URL: 'https://dose-node-control.fly.dev' });
+    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: '7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec', POC_CONTAINER_URL: 'https://dose-node-control.fly.dev' }); // gitleaks:allow: an Access application audience tag, a public identifier, not a secret
   });
 
   test('staging has neither the container URL nor the token', () => {
-    expect(config.env?.['staging']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: 'f2378fb4a0874cb43a100ca833aad25eafa1e0fad39ce98471af3c5247227237' });
+    expect(config.env?.['staging']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: 'f2378fb4a0874cb43a100ca833aad25eafa1e0fad39ce98471af3c5247227237' }); // gitleaks:allow: an Access application audience tag, a public identifier, not a secret
     expect(Object.keys(config.vars ?? {})).not.toContain('POC_CONTAINER_URL');
   });
 

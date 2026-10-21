@@ -4,3 +4,8 @@
 # called checkoutKey). The same line carries `gitleaks:allow` in the current tree; this entry covers
 # the commit that introduced it.
 67a2a881da4996988a91fe14b954dd28d290ed7f:packages/core/test/orders-schema.test.ts:generic-api-key:58
+# Cloudflare Access application audience (AUD) tags of the staging and poc Workers: public
+# identifiers that Access puts in every JWT it signs and that the dashboard lists under
+# "Application values"; flagged as generic-api-key because they are 64 hex characters. The lines
+# carry `gitleaks:allow` in the current tree; this entry covers the commit that introduced them.
+0386885805d67c3b2b6f3fb1f7a55f988dccccfd:apps/web/test/wrangler-config.test.ts:generic-api-key:136
