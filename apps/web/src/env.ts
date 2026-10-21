@@ -11,6 +11,10 @@ export interface WorkerEnv {
   ENVIRONMENT: string;
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUD: string;
+  /** The poc Worker only (Milestone 1, Task 19): the Node container's origin, for `/poc/latency`. */
+  POC_CONTAINER_URL?: string;
+  /** The poc Worker only: the container's bearer token (a Worker secret), for `/poc/latency`. */
+  POC_TOKEN?: string;
 }
 
 const ENVIRONMENTS: readonly ApiDeps['env'][] = ['local', 'test', 'preview', 'staging', 'production'];

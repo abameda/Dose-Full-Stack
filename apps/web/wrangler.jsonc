@@ -68,7 +68,10 @@
         "ENVIRONMENT": "staging",
         // Filled in after the Cloudflare Access setup (Task 17/18).
         "ACCESS_TEAM_DOMAIN": "",
-        "ACCESS_AUD": ""
+        "ACCESS_AUD": "",
+        // The Node container's origin for /poc/latency (Task 19), filled in when it is deployed. Its
+        // bearer token is the Worker secret POC_TOKEN (`wrangler secret put`), never in this file.
+        "POC_CONTAINER_URL": ""
       },
       // No R2 bucket until launch (decision 0011). Wrangler still warns that MEDIA is top-level only.
       "r2_buckets": [],

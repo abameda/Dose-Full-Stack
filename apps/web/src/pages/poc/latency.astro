@@ -1,0 +1,248 @@
+---
+// The latency page of the proof of concept (Milestone 1, Task 19), opened on the owner's phone:
+// 50 checkouts against this Worker and 50 against the Node container, one at a time and
+// interleaved (W, C, W, C, ...), after one warm-up each, then p50/p95/p99 per target and the
+// decision rule's ratio `worker_p95 / container_p95` (src/poc-latency.ts holds the maths).
+//
+// Staff only and private: `/poc/...` is a staff area (src/staff-guard.ts), so the middleware has
+// required a signed-in staff member and marks the response private and not indexed. Never in
+// production (a 404 there, like any unknown page). The page carries the container's bearer token
+// to the browser, which is acceptable only because of those three walls; the token is destroyed
+// with the container after Gate 1.
+import { env } from 'cloudflare:workers';
+import { CHECKOUTS_PER_TARGET, RATIO_LIMIT, latencyPageConfig } from '../../poc-latency';
+
+export const prerender = false;
+
+const config = latencyPageConfig(env);
+if (config.kind === 'not-found') {
+  return new Response('Not found', { status: 404 });
+}
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>DÖSE checkout latency (proof of concept)</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; color: #111; background: #fff; }
+      h1 { font-size: 1.25rem; margin: 0 0 8px; }
+      table { border-collapse: collapse; width: 100%; margin: 12px 0; font-variant-numeric: tabular-nums; }
+      th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+      button { font: inherit; padding: 10px 14px; margin: 4px 8px 4px 0; }
+      textarea { width: 100%; min-height: 12rem; font: 12px/1.3 monospace; }
+      .verdict { font-weight: 600; }
+      .muted { color: #555; font-size: 0.875rem; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Checkout latency: Worker vs container</h1>
+      <p class="muted">
+        Proof of concept, Milestone 1. {CHECKOUTS_PER_TARGET} checkouts per target, interleaved, after one warm-up each.
+        The core moves to the container if the Worker's p95 is more than {RATIO_LIMIT} times the container's.
+      </p>
+      {
+        config.kind === 'missing' ? (
+          <p role="alert">Not configured: {config.names.join(' and ')} not set on this Worker. Nothing runs.</p>
+        ) : (
+          <section id="poc" data-container-url={config.containerUrl} data-token={config.token}>
+            <p id="status" role="status">Starting…</p>
+            <table>
+              <thead>
+                <tr><th>ms</th><th>n</th><th>failed</th><th>p50</th><th>p95</th><th>p99</th><th>min</th><th>max</th></tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+            <p id="verdict" class="verdict"></p>
+            <p id="details" class="muted"></p>
+            <button id="run-again" type="button" disabled>Run again</button>
+            <button id="copy" type="button" disabled>Copy results</button>
+            <p id="copy-status" class="muted" role="status"></p>
+            <textarea id="fallback" readonly hidden aria-label="Results as JSON"></textarea>
+          </section>
+        )
+      }
+    </main>
+    <script>
+      import {
+        CHECKOUTS_PER_TARGET,
+        LATENCY_SKU,
+        RATIO_LIMIT,
+        interleaved,
+        latencyCheckoutBody,
+        latencyTestPhone,
+        stats,
+        verdict,
+        type Stats,
+        type Target,
+      } from '../../poc-latency';
+
+      interface Sample {
+        target: Target;
+        index: number;
+        ms: number;
+        status: number | null;
+        ok: boolean;
+        error?: string;
+      }
+
+      const root = document.getElementById('poc');
+      if (root !== null) setUp(root);
+
+      function setUp(root: HTMLElement): void {
+        const containerUrl = root.dataset['containerUrl'] ?? '';
+        const token = root.dataset['token'] ?? '';
+        const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+        const statusEl = el('status');
+        const rows = el('rows');
+        const verdictEl = el('verdict');
+        const details = el('details');
+        const runAgain = el<HTMLButtonElement>('run-again');
+        const copy = el<HTMLButtonElement>('copy');
+        const copyStatus = el('copy-status');
+        const fallback = el<HTMLTextAreaElement>('fallback');
+        let results: unknown = null;
+
+        /** Today's total for one unit of POC-LATENCY delivered to Cairo, from this Worker. */
+        async function quotedTotal(): Promise<number> {
+          const response = await fetch('/api/bag/quote', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ lang: 'en', lines: [{ sku: LATENCY_SKU, quantity: 1 }], governorate: 'cairo' }),
+          });
+          if (!response.ok) throw new Error(`pricing the bag answered ${String(response.status)}`);
+          const bag = (await response.json()) as { total: number; unavailable: string[] };
+          if (bag.unavailable.length > 0) throw new Error(`${LATENCY_SKU} is not on sale (run pnpm poc:concurrency once to create it)`);
+          return bag.total;
+        }
+
+        /** One checkout, timed from just before the request to the end of the body. */
+        async function checkout(target: Target, index: number, total: number): Promise<Sample> {
+          const url = target === 'worker' ? '/api/checkout' : `${containerUrl}/api/checkout`;
+          const headers: Record<string, string> = { 'content-type': 'application/json' };
+          if (target === 'container') headers['authorization'] = `Bearer ${token}`;
+          const body = JSON.stringify(
+            latencyCheckoutBody({ key: crypto.randomUUID(), phone: latencyTestPhone(), quotedTotal: total, target, index }),
+          );
+          const started = performance.now();
+          try {
+            const response = await fetch(url, { method: 'POST', headers, body, cache: 'no-store' });
+            await response.text();
+            return { target, index, ms: performance.now() - started, status: response.status, ok: response.status === 201 };
+          } catch (error) {
+            const message = error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error';
+            return { target, index, ms: performance.now() - started, status: null, ok: false, error: message };
+          }
+        }
+
+        const fmt = (ms: number) => ms.toFixed(0);
+
+        function row(name: string, s: Stats | null, failed: number): string {
+          const cells = s === null ? ['0', String(failed), '-', '-', '-', '-', '-'] : [String(s.n), String(failed), fmt(s.p50), fmt(s.p95), fmt(s.p99), fmt(s.min), fmt(s.max)];
+          return `<tr><th scope="row">${name}</th>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+        }
+
+        function connection(): Record<string, unknown> | null {
+          const c = (navigator as Navigator & { connection?: { effectiveType?: string; downlink?: number; rtt?: number } }).connection;
+          return c === undefined ? null : { effectiveType: c.effectiveType ?? null, downlink: c.downlink ?? null, rtt: c.rtt ?? null };
+        }
+
+        function show(samples: Sample[], warmup: Sample[], total: number, measuredAt: string): void {
+          const timings = (t: Target) => samples.filter((s) => s.target === t && s.ok).map((s) => s.ms);
+          const failed = (t: Target) => samples.filter((s) => s.target === t && !s.ok).length;
+          const worker = stats(timings('worker'));
+          const container = stats(timings('container'));
+          const v = verdict(worker, container);
+          rows.innerHTML = row('Worker', worker, failed('worker')) + row('Container', container, failed('container'));
+          verdictEl.textContent =
+            v === null
+              ? 'No ratio: a target has no successful checkout.'
+              : `worker_p95 / container_p95 = ${v.ratio.toFixed(2)}: ${v.exceeds ? `exceeds ${String(RATIO_LIMIT)}, the core would move to the container` : `does not exceed ${String(RATIO_LIMIT)}`}.`;
+          const net = connection();
+          details.textContent = [
+            `Measured ${measuredAt}.`,
+            net === null ? 'Network: not exposed by this browser.' : `Network: ${String(net['effectiveType'])}, downlink ${String(net['downlink'])} Mb/s, rtt ${String(net['rtt'])} ms.`,
+            `Browser: ${navigator.userAgent}`,
+          ].join(' ');
+          const failures = samples.filter((s) => !s.ok).map(({ target, index, status, error }) => ({ target, index, status, error: error ?? null }));
+          results = {
+            measuredAt,
+            page: location.origin,
+            containerUrl,
+            checkoutsPerTarget: CHECKOUTS_PER_TARGET,
+            quotedTotal: total,
+            connection: net,
+            userAgent: navigator.userAgent,
+            worker: { ...worker, failed: failed('worker') },
+            container: { ...container, failed: failed('container') },
+            ratio: v?.ratio ?? null,
+            exceeds: v?.exceeds ?? null,
+            ratioLimit: RATIO_LIMIT,
+            percentileMethod: 'nearest rank',
+            warmup: warmup.map(({ target, ms, status, ok }) => ({ target, ms, status, ok })),
+            failures,
+            samples: samples.map(({ target, index, ms, status, ok }) => ({ target, index, ms, status, ok })),
+          };
+        }
+
+        async function run(): Promise<void> {
+          runAgain.disabled = true;
+          copy.disabled = true;
+          copyStatus.textContent = '';
+          fallback.hidden = true;
+          rows.innerHTML = '';
+          verdictEl.textContent = '';
+          details.textContent = '';
+          try {
+            statusEl.textContent = 'Pricing the checkout…';
+            const total = await quotedTotal();
+            statusEl.textContent = 'Warming up both targets (not counted)…';
+            const warmup = [await checkout('worker', 0, total), await checkout('container', 0, total)];
+            const samples: Sample[] = [];
+            const plan = interleaved(CHECKOUTS_PER_TARGET);
+            for (const [i, target] of plan.entries()) {
+              statusEl.textContent = `Checkout ${String(i + 1)} of ${String(plan.length)} (${target})…`;
+              samples.push(await checkout(target, Math.floor(i / 2) + 1, total));
+            }
+            const measuredAt = new Date().toISOString();
+            show(samples, warmup, total, measuredAt);
+            const failedCount = samples.filter((s) => !s.ok).length;
+            statusEl.textContent = `Done: ${String(samples.length)} checkouts, ${String(failedCount)} failed (left out of the percentiles).`;
+            copy.disabled = false;
+          } catch (error) {
+            statusEl.textContent = `Stopped: ${error instanceof Error ? error.message : 'unknown error'}`;
+          } finally {
+            runAgain.disabled = false;
+          }
+        }
+
+        async function copyResults(): Promise<void> {
+          const text = JSON.stringify(results, null, 2);
+          try {
+            if (navigator.clipboard === undefined) throw new Error('no clipboard');
+            await navigator.clipboard.writeText(text);
+            copyStatus.textContent = 'Copied to the clipboard.';
+          } catch {
+            // In-app browsers often refuse the clipboard: show the text to copy by hand.
+            fallback.value = text;
+            fallback.hidden = false;
+            fallback.focus();
+            fallback.select();
+            copyStatus.textContent = 'The clipboard is not available here: copy the text below.';
+          }
+        }
+
+        runAgain.addEventListener('click', () => void run());
+        copy.addEventListener('click', () => void copyResults());
+        void run();
+      }
+    </script>
+  </body>
+</html>

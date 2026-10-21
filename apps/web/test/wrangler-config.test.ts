@@ -110,7 +110,7 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
   });
 
   test('is ENVIRONMENT staging, with Access vars to be filled in', () => {
-    expect(env?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '' });
+    expect(env?.vars).toMatchObject({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '' });
   });
 
   test('has its own Hyperdrive binding, with no local connection string', () => {
@@ -128,6 +128,23 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
 
   test('has observability on', () => {
     expect(env?.observability).toEqual({ enabled: true });
+  });
+});
+
+describe('the proof-of-concept settings (Task 19)', () => {
+  test('only poc has the container URL, empty until the controller fills it in', () => {
+    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '', POC_CONTAINER_URL: '' });
+  });
+
+  test('staging has neither the container URL nor the token', () => {
+    expect(config.env?.['staging']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '' });
+    expect(Object.keys(config.vars ?? {})).not.toContain('POC_CONTAINER_URL');
+  });
+
+  test('the token is a secret: it appears in no vars of the file', () => {
+    for (const vars of [config.vars, ...Object.values(config.env ?? {}).map((e) => e.vars)]) {
+      expect(Object.keys(vars ?? {})).not.toContain('POC_TOKEN');
+    }
   });
 });
 

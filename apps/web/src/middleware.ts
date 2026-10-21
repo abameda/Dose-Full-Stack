@@ -6,7 +6,7 @@ import { guardStaffArea, isStaffAreaPath, withPrivateHeaders } from './staff-gua
 
 /**
  * Puts the page's language and direction on `Astro.locals`, for the layout's `<html lang dir>`,
- * and keeps the studio and the admin behind staff sign-in: no staff is a 401, and every response
+ * and keeps the staff areas (the studio, the admin, the poc pages) behind staff sign-in: no staff is a 401, and every response
  * there, a refusal or an error included, is private and not indexed.
  */
 export const onRequest = defineMiddleware(async (context, next) => {

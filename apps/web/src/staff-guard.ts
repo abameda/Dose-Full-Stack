@@ -1,13 +1,14 @@
 import { PRIVATE_HEADERS } from '@dose/api';
 import type { Staff } from '@dose/contract';
 
-// Two areas of the site are for signed-in staff only: the studio, which shows unreleased design
-// directions on real products, and the admin. Neither is ever cached or indexed (constraints). The
+// Three areas of the site are for signed-in staff only: the studio, which shows unreleased design
+// directions on real products, the admin, and the proof-of-concept pages of Milestone 1 (`/poc/...`,
+// which hold the Node container's token). None is ever cached or indexed (constraints). The
 // studio refuses to run checkout; the admin's API (`/api/admin/*`) has its own guard, which also
 // checks each person's role, so this one only decides who may be sent the admin's pages.
 
-/** The first path segments that belong to staff: `/studio/...` and `/admin/...`. */
-const STAFF_AREAS: readonly string[] = ['studio', 'admin'];
+/** The first path segments that belong to staff: `/studio/...`, `/admin/...` and `/poc/...`. */
+const STAFF_AREAS: readonly string[] = ['studio', 'admin', 'poc'];
 
 /** The most times a path is percent-decoded, as in Astro's router (`validateAndDecodePathname`). */
 const MAX_DECODES = 10;
@@ -39,7 +40,7 @@ function routedSegments(pathname: string): string[] | null {
 }
 
 /**
- * Whether a request path is a staff area (the studio or the admin) or anything under one
+ * Whether a request path is a staff area (the studio, the admin or the poc pages) or anything under one
  * (compared without regard to case). It reads the path the way the router does, so
  * `/%73tudio/...`, `/%2573tudio/...`, `//studio/...`, `/studio%2F...` and `/%61dmin/...` are
  * guarded too (Astro hands the middleware an already-decoded URL, but the guard does not depend

@@ -20,9 +20,18 @@ test('the admin is guarded the same way', async () => {
   expect(await guardStaffArea(request('/admin'), () => Promise.resolve(OWNER))).toBeNull();
 });
 
-test('the refusal names neither the studio nor the admin', async () => {
-  const refused = await guardStaffArea(request('/admin'), () => Promise.resolve(null));
-  expect(await refused?.text()).not.toMatch(/studio|admin|paradise|blanc/i);
+test('the poc pages are guarded the same way', async () => {
+  const refused = await guardStaffArea(request('/poc/latency'), () => Promise.resolve(null));
+  expect(refused?.status).toBe(401);
+  expect(Object.fromEntries(refused?.headers ?? [])).toMatchObject(PRIVATE);
+  expect(await guardStaffArea(request('/poc/latency'), () => Promise.resolve(OWNER))).toBeNull();
+});
+
+test('the refusal names neither the studio, the admin nor the poc pages', async () => {
+  for (const path of ['/admin', '/poc/latency']) {
+    const refused = await guardStaffArea(request(path), () => Promise.resolve(null));
+    expect(await refused?.text()).not.toMatch(/studio|admin|poc|latency|paradise|blanc/i);
+  }
 });
 
 test('an active staff member continues (null), whatever their role', async () => {
@@ -83,7 +92,22 @@ test.each([
   ['/admin%2Faudit', true],
   ['/./admin/audit', true],
   ['/en/../admin', true],
+  ['/poc', true],
+  ['/poc/', true],
+  ['/poc/latency', true],
+  ['/POC/latency', true],
+  ['/%70oc/latency', true],
+  ['/%2570oc/latency', true],
+  ['//poc/latency', true],
+  ['/poc%2Flatency', true],
+  ['/./poc/latency', true],
+  ['/en/../poc/latency', true],
   ['/administrator', false],
+  ['/pocket', false],
+  ['/pocs/latency', false],
+  ['/en/poc/latency', false],
+  ['/api/poc', false],
+  ['/en/products/poc-latency', false],
   ['/admins/en', false],
   ['/api/admin/me', false],
   ['/en/admin', false],

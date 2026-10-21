@@ -119,3 +119,147 @@ pnpm --filter @dose/web exec wrangler hyperdrive delete <config ID>
 
 Re-running the pull request's "Preview cleanup" run in GitHub Actions does the same, for that pull
 request only.
+
+## Proof of concept (Milestone 1 only)
+
+Task 19 runs the same commerce core on the `poc` Worker (`dose-web-poc`, Hyperdrive to the Neon
+`poc` branch) and on a Node container on Fly.io in Frankfurt (`apps/node-control`, app
+`dose-node-control`, `dose_app` on the same branch), proves both under concurrency, and measures
+checkout latency from a phone. Decision rule (master plan, section A): if the Worker's p95 measured
+from a phone in Egypt is more than 1.5 times the container's, the core moves to the container.
+Everything here is torn down after Gate 1.
+
+Commands only: every value comes from an exported shell variable (set from a password manager or
+with `read -s`), never from this file or a command line. Run from the repository root.
+
+### The poc database
+
+Before the first run the `poc` branch is migrated and names itself `nonprod:poc` (the runner
+refuses any other database):
+
+```sh
+pnpm migrate --target "$POC_OWNER_URL" --allow-remote
+pnpm env:identity --target "$POC_OWNER_URL" --allow-remote --name nonprod:poc
+```
+
+The runner creates the two poc products itself (`poc-concurrency` / `POC-CONCURRENCY` and
+`poc-latency` / `POC-LATENCY`, placeholder copy saying they exist only for the proof of concept)
+and keeps at least 10,000 units of `POC-LATENCY` free for the latency page. Run it once (even
+`--runs 1`) before opening the page.
+
+### The container (Fly.io)
+
+The trial allows about 2 hours of machine time in all (decision 0009): the machine runs only while
+measuring. `apps/node-control/fly.toml` repeats these commands in its header.
+
+```sh
+fly apps create dose-node-control
+# A fresh token, kept in this shell only (the Worker gets the same one, below):
+POC_TOKEN="$(openssl rand -hex 32)"
+POC_ALLOWED_ORIGIN="https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev"
+# DATABASE_URL: dose_app on the poc branch. printf is a shell builtin, so no value appears on a
+# process's command line; --stage sets the secrets without starting anything.
+printf 'DATABASE_URL=%s\nPOC_TOKEN=%s\nPOC_ALLOWED_ORIGIN=%s\n' "$DATABASE_URL" "$POC_TOKEN" "$POC_ALLOWED_ORIGIN" \
+  | fly secrets import --app dose-node-control --stage
+# Built here by the local Docker (no remote builder), one machine only. The `.` keeps the build
+# context at the repository root despite --config.
+fly deploy . --config apps/node-control/fly.toml --dockerfile apps/node-control/Dockerfile --local-only --ha=false
+```
+
+The image can be checked locally first: `docker build -f apps/node-control/Dockerfile .` (the root
+`.dockerignore` keeps the context small). Without `POC_TOKEN` (32 characters or more) or
+`POC_ALLOWED_ORIGIN` the container stops at start. Every request needs
+`Authorization: Bearer <POC_TOKEN>`, and anything else is a 401, so Fly's health check is TCP only.
+Smoke it with `curl -H "Authorization: Bearer $POC_TOKEN" "https://dose-node-control.fly.dev/api/products?lang=en"`.
+
+Stop the machine as soon as a measurement is done, and start it just before the next:
+
+```sh
+fly machine list --app dose-node-control
+fly machine stop <machine id> --app dose-node-control
+fly machine start <machine id> --app dose-node-control
+```
+
+`auto_stop_machines` also stops an idle machine and the next request starts it again; that first
+request pays the start-up, which is one reason every measurement begins with a warm-up.
+
+### The poc Worker's two settings
+
+The latency page needs the container's origin (`POC_CONTAINER_URL`, a var, `""` in
+`wrangler.jsonc`) and its token (`POC_TOKEN`, a Worker secret). With the container's `POC_TOKEN`
+in the shell:
+
+```sh
+CLOUDFLARE_ENV=poc pnpm --filter @dose/web build
+printf '%s' "$POC_TOKEN" | pnpm --filter @dose/web exec wrangler secret put POC_TOKEN --name dose-web-poc
+pnpm --filter @dose/web exec wrangler deploy --var POC_CONTAINER_URL:https://dose-node-control.fly.dev
+```
+
+Not yet observed against Cloudflare: that `wrangler secret put --name dose-web-poc` targets the poc
+Worker while the redirected build configuration is in place, and that `--var` on the deploy reaches
+the built configuration. Check with `wrangler secret list --name dose-web-poc` and by opening the
+page (it names a missing setting).
+
+### The concurrency proof (`pnpm poc:concurrency`)
+
+Per run, `POC-CONCURRENCY` is reset to exactly `--units` free units (one ledger adjustment through
+the owner connection), `--concurrency` checkouts are fired at once, and the run passes only with
+exactly `--units` 201s, every other answer a 409 `out_of_stock`, that many orders in the database
+for the run's idempotency keys and `checkRules` empty. Any other status, network error or timeout
+(60 s) fails the run and is named with its message: that is how belief B4 is judged. The runner
+prints a line per run and a summary, appends a JSON line per run with `--out` (relative to the
+directory the command is typed in), and exits 1 when any run failed.
+
+```sh
+# The Worker, through Access: POC_OWNER_URL, CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET exported
+# (the service token is an active staff member on the poc branch).
+pnpm poc:concurrency --target "https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev" --auth access \
+  --runs 40 --concurrency 200 --units 10 --out poc-worker.jsonl
+
+# The container (its machine started): POC_OWNER_URL and POC_TOKEN exported.
+pnpm poc:concurrency --target https://dose-node-control.fly.dev --auth bearer \
+  --runs 100 --concurrency 200 --units 10 --out poc-container.jsonl
+```
+
+Hyperdrive's free plan allows 100,000 queries a day. One run of 200 checkouts costs roughly 1,900
+of them (an estimate from the statements one checkout runs, about 15 for a placed order and 9 for a
+refusal; not yet measured), so the Worker's 100 runs are split over three days, continuing the
+numbering and the evidence file: day 1 `--runs 40`, day 2 `--start 41 --runs 40`, day 3
+`--start 81 --runs 20`. Read the day's query count in the Hyperdrive dashboard after day 1 and
+adjust the split. The container's runs do not touch Hyperdrive.
+
+### The latency page (`/poc/latency`)
+
+Open `https://dose-web-poc.<subdomain>.workers.dev/poc/latency`, signed in through Access as staff.
+`/poc/...` is a staff area (private, not indexed, a 401 without staff) and a 404 in production. The
+page prices one unit of `POC-LATENCY`, warms up each target once (not counted: Neon sleeps after 5
+minutes, decision 0009, and the container's CORS preflight is cached for the rest), then runs 50
+checkouts against the Worker (same origin) and 50 against the container (with the bearer token),
+interleaved and one at a time. It shows n, p50, p95, p99 (nearest rank), min and max per target,
+the ratio `worker_p95 / container_p95` and whether it exceeds 1.5, the network type where the
+browser exposes it, the user agent and the time. "Copy results" puts all of it and every timing on
+the clipboard as JSON, or shows it in a box to copy by hand where the clipboard is refused (in-app
+browsers). Without `POC_CONTAINER_URL` or `POC_TOKEN` the page says so and runs nothing.
+
+The page sends the container's token to the browser. That is acceptable only because the page is
+staff only, private and never in production, and the token is destroyed with the container.
+
+### Teardown after Gate 1
+
+```sh
+fly apps destroy dose-node-control                     # machines, secrets and image
+pnpm --filter @dose/web exec wrangler secret delete POC_TOKEN --name dose-web-poc
+```
+
+Then either delete the whole `poc` Neon branch (by its ID, as for a stuck preview above, after
+checking its name is exactly `poc`), or keep the branch and take the two products off sale through
+the owner connection (orders reference them, so they are unpublished rather than deleted):
+
+```sql
+update variants set status = 'archived' where sku in ('POC-CONCURRENCY', 'POC-LATENCY');
+update products set status = 'draft' where slug in ('poc-concurrency', 'poc-latency');
+```
+
+Finally remove the proof-of-concept code: `poc/` (and its entries in `pnpm-workspace.yaml`, the
+root `package.json` and `vitest.config.ts`), `apps/web/src/pages/poc/`, `poc` in
+`apps/web/src/staff-guard.ts`, and `POC_CONTAINER_URL` in `apps/web/wrangler.jsonc`.
