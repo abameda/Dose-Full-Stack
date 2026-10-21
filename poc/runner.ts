@@ -117,6 +117,27 @@ export function requireVar(env: Record<string, string | undefined>, name: string
   return value;
 }
 
+/**
+ * `POC_OWNER_URL`, checked to be a postgres URL before any driver sees it. The error never includes
+ * the value: it holds the owner password, and a URL parse error would carry it along as its input.
+ */
+export function ownerUrlFrom(env: Record<string, string | undefined>): string {
+  const value = requireVar(env, 'POC_OWNER_URL');
+  let protocol: string;
+  try {
+    protocol = new URL(value).protocol;
+  } catch {
+    protocol = '';
+  }
+  if (protocol !== 'postgres:' && protocol !== 'postgresql:') {
+    throw new Error('POC_OWNER_URL is not a valid postgres:// URL');
+  }
+  return value;
+}
+
+/** The session advisory lock (`pg_try_advisory_lock`) one invocation of the runner holds; any fixed number. */
+export const RUNNER_LOCK_KEY = 1_909_201_019;
+
 /** The headers that get a request past the target's front door. */
 export function authHeaders(auth: AuthMode, env: Record<string, string | undefined>): Record<string, string> {
   if (auth === 'bearer') return { authorization: `Bearer ${requireVar(env, 'POC_TOKEN')}` };
@@ -199,8 +220,24 @@ export interface RunTally {
   other: OtherAnswer[];
 }
 
-/** Sorts one checkout's answer into the tally: 201, 409 `out_of_stock`, or anything else. */
-export function classify(status: number, body: string): 'created' | 'outOfStock' | OtherAnswer {
+const isJson = (contentType: string | null | undefined): boolean => contentType?.toLowerCase().includes('json') === true;
+
+/**
+ * One answer's body as a short line for a failure message. A body that is not JSON (an HTML login
+ * or error page, say) is prefixed with its content type, e.g. `[text/html] <!doctype html>…`.
+ */
+export function bodySnippet(body: string, contentType?: string | null): string {
+  const text = body.replace(/\s+/g, ' ').trim().slice(0, 200) || '(empty body)';
+  return contentType === undefined || isJson(contentType) ? text : `[${contentType ?? 'no content-type'}] ${text}`;
+}
+
+/**
+ * Sorts one checkout's answer into the tally: 201 (an order), 409 with a JSON body whose code is
+ * `out_of_stock`, or anything else, a redirect (an Access login after a revoked token) included,
+ * with its status, content type and the start of its body.
+ */
+export function classify(status: number, body: string, contentType?: string | null): 'created' | 'outOfStock' | OtherAnswer {
+  if (status === 201) return 'created';
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
@@ -208,9 +245,8 @@ export function classify(status: number, body: string): 'created' | 'outOfStock'
     parsed = undefined;
   }
   const code = typeof parsed === 'object' && parsed !== null && 'code' in parsed ? parsed.code : undefined;
-  if (status === 201) return 'created';
   if (status === 409 && code === 'out_of_stock') return 'outOfStock';
-  return { status, message: body.replace(/\s+/g, ' ').trim().slice(0, 200) };
+  return { status, message: bodySnippet(body, contentType) };
 }
 
 export function tally(answers: readonly ('created' | 'outOfStock' | OtherAnswer)[]): RunTally {
@@ -410,6 +446,11 @@ async function ordersFor(owner: Tx, keys: readonly string[]): Promise<number> {
 export interface RunnerDeps {
   /** The owner role (`dose_owner`) on the poc branch. */
   owner: Db;
+  /**
+   * A second owner connection of its own (one session, `createRequestDb`), which holds the runner's
+   * advisory lock for the whole invocation, so two invocations never run against one database at once.
+   */
+  lock: Db;
   fetch: typeof fetch;
   /** The target's front-door headers (`authHeaders`). */
   headers: Record<string, string>;
@@ -429,22 +470,41 @@ function errorText(error: unknown): string {
 }
 
 /** One request; network errors and timeouts become a null status with their message. */
-async function send(deps: RunnerDeps, url: string, init: RequestInit): Promise<{ status: number | null; body: string }> {
+/**
+ * One request; network errors and timeouts become a null status with their message. Redirects are
+ * not followed (`redirect: 'manual'`): a 3xx, such as Access sending a refused service token to its
+ * login page, is an answer in its own right and is recorded as one.
+ */
+async function send(deps: RunnerDeps, url: string, init: RequestInit): Promise<{ status: number | null; contentType: string | null; body: string }> {
   try {
-    const response = await deps.fetch(url, { ...init, signal: AbortSignal.timeout(deps.timeoutMs ?? CHECKOUT_TIMEOUT_MS) });
-    return { status: response.status, body: await response.text() };
+    const response = await deps.fetch(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(deps.timeoutMs ?? CHECKOUT_TIMEOUT_MS) });
+    return { status: response.status, contentType: response.headers.get('content-type'), body: await response.text() };
   } catch (error) {
-    return { status: null, body: errorText(error) };
+    return { status: null, contentType: null, body: errorText(error) };
   }
 }
 
-/** Today's total for one unit of `POC-CONCURRENCY` delivered to Cairo: its price from the target's API, plus the fee. */
+/**
+ * Today's total for one unit of `POC-CONCURRENCY` delivered to Cairo: its price from the target's
+ * API, plus the fee. Anything but a 200 with the product as JSON is returned as the failure to record.
+ */
 async function quotedTotal(deps: RunnerDeps, target: string): Promise<number | string> {
+  const what = `GET /api/products/${CONCURRENCY_PRODUCT.slug}`;
   const answer = await send(deps, `${target}/api/products/${CONCURRENCY_PRODUCT.slug}?lang=en`, { headers: deps.headers });
-  if (answer.status !== 200) return `GET /api/products/${CONCURRENCY_PRODUCT.slug}: ${answer.status === null ? 'no response' : `status ${String(answer.status)}`}: ${answer.body.slice(0, 200)}`;
-  const product = JSON.parse(answer.body) as ProductView;
+  if (answer.status === null) return `${what}: no response: ${answer.body}`;
+  const snippet = bodySnippet(answer.body, answer.contentType);
+  if (answer.status !== 200) return `${what}: status ${String(answer.status)}: ${snippet}`;
+  let product: Partial<ProductView> | null;
+  try {
+    product = JSON.parse(answer.body) as Partial<ProductView> | null;
+  } catch {
+    product = null;
+  }
+  if (!isJson(answer.contentType) || product === null || !Array.isArray(product.variants)) {
+    return `${what}: status 200 but not the product as JSON: ${bodySnippet(answer.body, answer.contentType)}`;
+  }
   const variant = product.variants.find((v) => v.sku === CONCURRENCY_PRODUCT.sku);
-  if (variant === undefined) return `GET /api/products/${CONCURRENCY_PRODUCT.slug}: no ${CONCURRENCY_PRODUCT.sku} variant`;
+  if (variant === undefined) return `${what}: no ${CONCURRENCY_PRODUCT.sku} variant`;
   return variant.price + (await deliveryFee(deps.owner));
 }
 
@@ -478,7 +538,7 @@ export async function runOnce(args: RunnerArgs, deps: RunnerDeps, setup: PocSetu
   const answers = await Promise.all(
     bodies.map(async (body) => {
       const answer = await send(deps, `${args.target}/api/checkout`, { method: 'POST', headers, body: JSON.stringify(body) });
-      return answer.status === null ? { status: null, message: answer.body } : classify(answer.status, answer.body);
+      return answer.status === null ? { status: null, message: answer.body } : classify(answer.status, answer.body, answer.contentType);
     }),
   );
   const counted = tally(answers);
@@ -499,11 +559,26 @@ export async function runOnce(args: RunnerArgs, deps: RunnerDeps, setup: PocSetu
 }
 
 /**
- * The whole proof: setup, then runs `start` to `start + runs - 1` one after another, a line per
- * run (and a JSON line per run with `--out`), then the summary. A failed run does not stop the
- * rest; the summary says how many failed.
+ * The whole proof: the runner lock (refused while another invocation holds it), setup, then runs
+ * `start` to `start + runs - 1` one after another, a line per run (and a JSON line per run with
+ * `--out`), then the summary. A failed run does not stop the rest; the summary says how many failed.
  */
 export async function runConcurrencyProof(args: RunnerArgs, deps: RunnerDeps): Promise<Summary> {
+  const [lock] = await deps.lock.query<{ held: boolean }>(`select pg_try_advisory_lock($1) as held`, [RUNNER_LOCK_KEY]);
+  if (lock?.held !== true) {
+    throw new Error(
+      'refusing to run: another pnpm poc:concurrency is running against this database (it holds the runner lock); ' +
+        'two at once would reset the same stock under each other. Wait for it to finish.',
+    );
+  }
+  try {
+    return await runLocked(args, deps);
+  } finally {
+    await deps.lock.query(`select pg_advisory_unlock($1)`, [RUNNER_LOCK_KEY]).catch(() => undefined);
+  }
+}
+
+async function runLocked(args: RunnerArgs, deps: RunnerDeps): Promise<Summary> {
   const began = performance.now();
   const runTag = newRunTag((deps.now ?? (() => new Date()))());
   const setup = await setupPoc(deps.owner, runTag);

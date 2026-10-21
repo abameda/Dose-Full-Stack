@@ -14,10 +14,15 @@
 #       | fly secrets import --app dose-node-control --stage
 #   Deploy: the image is built here by the local Docker, no remote builder runs; one machine only:
 #     fly deploy . --config apps/node-control/fly.toml --dockerfile apps/node-control/Dockerfile --local-only --ha=false
-#   Start before measuring, stop right after (auto-stop also stops it when idle):
+#   Between measuring sessions there is no machine at all. A stopped machine is not enough: with
+#   auto_start_machines on (needed while measuring), any request to the public hostname, even one
+#   refused with a 401, starts it again. At the start of a session:
+#     fly scale count 1 --region fra --app dose-node-control --yes
+#   At the end of a session, first read the machine's time (its event log: each start and stop,
+#   with times), then remove it:
 #     fly machine list --app dose-node-control
-#     fly machine start <machine id> --app dose-node-control
-#     fly machine stop <machine id> --app dose-node-control
+#     fly machine status <machine id> --app dose-node-control
+#     fly scale count 0 --app dose-node-control --yes
 #   After Gate 1, destroy the app and everything in it (machines, secrets, image):
 #     fly apps destroy dose-node-control
 

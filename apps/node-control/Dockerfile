@@ -21,7 +21,11 @@ RUN pnpm --filter @dose/node-control --prod --frozen-lockfile deploy /app
 # Run: the deployed package alone, as the unprivileged `node` user of the base image. The files
 # stay owned by root, so the process cannot change its own code.
 FROM node:24.16.0-slim
+# ENVIRONMENT is set here too (fly.toml sets it as well), so the image never starts as `local`,
+# which listens unguarded, by accident: outside `local` it refuses to start without POC_TOKEN and
+# POC_ALLOWED_ORIGIN.
 ENV NODE_ENV=production \
+    ENVIRONMENT=staging \
     HOST=0.0.0.0 \
     PORT=4010
 WORKDIR /app

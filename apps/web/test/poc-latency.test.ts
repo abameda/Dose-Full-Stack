@@ -7,6 +7,7 @@ import {
   latencyCheckoutBody,
   latencyPageConfig,
   latencyTestPhone,
+  measuredPlan,
   percentile,
   stats,
   verdict,
@@ -93,6 +94,21 @@ test('the checkouts alternate W, C, W, C, starting with the Worker, 50 of each',
   expect(plan.slice(0, 4)).toEqual(['worker', 'container', 'worker', 'container']);
   expect(plan.filter((t) => t === 'worker')).toHaveLength(50);
   expect(plan.every((t, i) => t === (i % 2 === 0 ? 'worker' : 'container'))).toBe(true);
+});
+
+describe('measuredPlan', () => {
+  test('both warmed up: the full interleaved plan', () => {
+    expect(measuredPlan(3, { worker: true, container: true })).toEqual(['worker', 'container', 'worker', 'container', 'worker', 'container']);
+  });
+
+  test('a target whose warm-up failed is not measured at all', () => {
+    expect(measuredPlan(3, { worker: true, container: false })).toEqual(['worker', 'worker', 'worker']);
+    expect(measuredPlan(3, { worker: false, container: true })).toEqual(['container', 'container', 'container']);
+  });
+
+  test('neither warmed up: nothing is measured', () => {
+    expect(measuredPlan(CHECKOUTS_PER_TARGET, { worker: false, container: false })).toEqual([]);
+  });
 });
 
 test('test phones are valid +2011 mobiles at both ends of the range', () => {

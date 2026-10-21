@@ -9,6 +9,7 @@ import {
   judgeRun,
   newRunTag,
   nextPhones,
+  ownerUrlFrom,
   parseRunnerArgs,
   runKeyPrefix,
   runLine,
@@ -90,6 +91,34 @@ describe('authHeaders', () => {
   });
 });
 
+describe('ownerUrlFrom', () => {
+  test('a postgres URL passes through unchanged', () => {
+    for (const url of ['postgres://dose_owner:pw@127.0.0.1:5432/dose', 'postgresql://dose_owner:pw@ep-x.neon.tech/dose?sslmode=require']) {
+      expect(ownerUrlFrom({ POC_OWNER_URL: url })).toBe(url);
+    }
+  });
+
+  test('missing is named', () => {
+    expect(() => ownerUrlFrom({})).toThrow('POC_OWNER_URL is not set');
+  });
+
+  test.each([
+    ['not a URL at all', 'dose_owner:s3cret-password@host/dose'],
+    ['a malformed URL', 'postgres://dose_owner:s3cret-password@[bad-host/dose'],
+    ['another scheme', 'https://dose_owner:s3cret-password@host/dose'],
+  ])('%s is refused with a fixed message that holds no part of the value', (_name, value) => {
+    let error: unknown;
+    try {
+      ownerUrlFrom({ POC_OWNER_URL: value });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('POC_OWNER_URL is not a valid postgres:// URL');
+    expect(JSON.stringify(error, Object.getOwnPropertyNames(error))).not.toContain('s3cret-password');
+  });
+});
+
 describe('test phones', () => {
   test('are +2010 and eight digits, valid Egyptian mobiles', () => {
     for (const n of [0, 1, 12_345_678, 99_999_999]) {
@@ -164,6 +193,16 @@ describe('classify and tally', () => {
     expect(classify(409, '{"ok":false,"code":"price_changed"}')).toEqual({ status: 409, message: '{"ok":false,"code":"price_changed"}' });
     expect(classify(500, '{"error":"internal"}')).toEqual({ status: 500, message: '{"error":"internal"}' });
     expect(classify(503, '<html>\n  Service   Unavailable </html>')).toEqual({ status: 503, message: '<html> Service Unavailable </html>' });
+  });
+
+  test('a redirect or a page that is not JSON is other, with its status and content type', () => {
+    expect(classify(302, '', null)).toEqual({ status: 302, message: '[no content-type] (empty body)' });
+    expect(classify(200, '<html>Sign in</html>', 'text/html; charset=utf-8')).toEqual({
+      status: 200,
+      message: '[text/html; charset=utf-8] <html>Sign in</html>',
+    });
+    expect(classify(409, '<html>out_of_stock</html>', 'text/html')).toEqual({ status: 409, message: '[text/html] <html>out_of_stock</html>' });
+    expect(classify(500, '{"error":"internal"}', 'application/json')).toEqual({ status: 500, message: '{"error":"internal"}' });
   });
 
   test('tally counts each kind', () => {

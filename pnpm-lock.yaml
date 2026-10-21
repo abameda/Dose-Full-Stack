@@ -452,6 +452,9 @@ importers:
       '@dose/api':
         specifier: workspace:*
         version: link:../packages/api
+      '@dose/node-control':
+        specifier: workspace:*
+        version: link:../apps/node-control
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2

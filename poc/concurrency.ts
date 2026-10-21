@@ -13,26 +13,31 @@
 //   --out          appends one JSON line per run to this file (relative to where pnpm was run)
 // Environment (never printed): POC_OWNER_URL, the owner role (`dose_owner`) on the poc branch; for
 // --auth access CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET; for --auth bearer POC_TOKEN.
-// It refuses to start unless the database's env_identity is `nonprod:poc`.
+// It refuses to start unless the database's env_identity is `nonprod:poc`, and while another
+// invocation runs against the same database (a Postgres advisory lock). Never measure latency on
+// /poc/latency while it runs.
 import path from 'node:path';
 import process from 'node:process';
-import { createPoolDb } from '@dose/core/db';
-import { authHeaders, parseRunnerArgs, requireVar, runConcurrencyProof } from './runner';
+import { createPoolDb, createRequestDb } from '@dose/core/db';
+import { authHeaders, ownerUrlFrom, parseRunnerArgs, runConcurrencyProof } from './runner';
 
 const args = parseRunnerArgs(process.argv.slice(2));
-// Every variable is checked before anything connects.
-const ownerUrl = requireVar(process.env, 'POC_OWNER_URL');
+// Every variable is checked before anything connects; a malformed owner URL never reaches the
+// driver, whose parse error would carry the URL (and its password) into the terminal.
+const ownerUrl = ownerUrlFrom(process.env);
 const headers = authHeaders(args.auth, process.env);
 // `pnpm poc:concurrency` runs this in poc/; a relative --out means where the command was typed.
 const out = args.out === undefined ? undefined : path.resolve(process.env['INIT_CWD'] ?? process.cwd(), args.out);
 
 const owner = createPoolDb(ownerUrl, { max: 2 });
+// One session of its own for the runner lock, held until the end.
+const lock = createRequestDb(ownerUrl);
 try {
   const summary = await runConcurrencyProof(
     { ...args, ...(out === undefined ? {} : { out }) },
-    { owner, fetch: (input, init) => fetch(input, init), headers, log: (line) => { console.log(line); } },
+    { owner, lock, fetch: (input, init) => fetch(input, init), headers, log: (line) => { console.log(line); } },
   );
   process.exitCode = summary.failed > 0 ? 1 : 0;
 } finally {
-  await owner.close();
+  await Promise.all([owner.close(), lock.close()]);
 }

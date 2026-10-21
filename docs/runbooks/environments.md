@@ -172,16 +172,29 @@ The image can be checked locally first: `docker build -f apps/node-control/Docke
 `Authorization: Bearer <POC_TOKEN>`, and anything else is a 401, so Fly's health check is TCP only.
 Smoke it with `curl -H "Authorization: Bearer $POC_TOKEN" "https://dose-node-control.fly.dev/api/products?lang=en"`.
 
-Stop the machine as soon as a measurement is done, and start it just before the next:
+**Between measuring sessions the app has no machine at all.** `fly.toml` keeps
+`auto_start_machines = true`, which the measurements need, so a merely stopped machine is started
+again by any request to the public `dose-node-control.fly.dev` (scanners find it; a 401 still
+starts the machine), and runs until Fly's idle auto-stop, against the trial's 2 hours. So a session
+starts by scaling to one machine and ends by scaling to zero:
 
 ```sh
+# Start of a session (the image and secrets stay with the app):
+fly scale count 1 --region fra --app dose-node-control --yes
+
+# End of a session: first read and record the machine's time (its event log lists every start
+# and stop with times; the Fly dashboard's usage page shows the total), then remove the machine.
 fly machine list --app dose-node-control
-fly machine stop <machine id> --app dose-node-control
-fly machine start <machine id> --app dose-node-control
+fly machine status <machine id> --app dose-node-control
+fly scale count 0 --app dose-node-control --yes
 ```
 
-`auto_stop_machines` also stops an idle machine and the next request starts it again; that first
-request pays the start-up, which is one reason every measurement begins with a warm-up.
+Record each session's machine time next to its measurements, and stop when the total nears the
+trial's 2 hours. Not yet observed against Fly: that `scale count 1` recreates the machine from the
+last deployed image with `fly.toml`'s settings (if it does not, `fly deploy` as above does).
+
+During a session, `auto_stop_machines` stops an idle machine and the next request starts it; that
+first request pays the start-up, which is one reason every measurement begins with a warm-up.
 
 ### The poc Worker's two settings
 
@@ -208,7 +221,16 @@ exactly `--units` 201s, every other answer a 409 `out_of_stock`, that many order
 for the run's idempotency keys and `checkRules` empty. Any other status, network error or timeout
 (60 s) fails the run and is named with its message: that is how belief B4 is judged. The runner
 prints a line per run and a summary, appends a JSON line per run with `--out` (relative to the
-directory the command is typed in), and exits 1 when any run failed.
+directory the command is typed in), and exits 1 when any run failed. Redirects are not followed: an
+Access login page (a revoked or wrong service token) is recorded as a failed run with its status
+and content type.
+
+**One invocation at a time, and no latency measurement while one runs.** Every invocation resets
+the same `POC-CONCURRENCY` stock, so two at once (say the container's runs started beside the
+Worker's) would place each other's units and record oversells that neither target caused; and a
+latency measurement during a burst of 200 checkouts measures a busy database. The runner holds a
+Postgres advisory lock on the owner connection for the whole invocation and refuses to start
+while another holds it; nothing stops the latency page, so wait for the runner's summary first.
 
 ```sh
 # The Worker, through Access: POC_OWNER_URL, CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET exported
@@ -235,7 +257,9 @@ Open `https://dose-web-poc.<subdomain>.workers.dev/poc/latency`, signed in throu
 page prices one unit of `POC-LATENCY`, warms up each target once (not counted: Neon sleeps after 5
 minutes, decision 0009, and the container's CORS preflight is cached for the rest), then runs 50
 checkouts against the Worker (same origin) and 50 against the container (with the bearer token),
-interleaved and one at a time. It shows n, p50, p95, p99 (nearest rank), min and max per target,
+interleaved and one at a time. A failed warm-up (a 502 while a machine starts, say) is shown as a
+warning and retried once; a target whose retry fails too is not measured, and the page gives no
+ratio (open it again once the target answers). Do not open it while `pnpm poc:concurrency` runs. It shows n, p50, p95, p99 (nearest rank), min and max per target,
 the ratio `worker_p95 / container_p95` and whether it exceeds 1.5, the network type where the
 browser exposes it, the user agent and the time. "Copy results" puts all of it and every timing on
 the clipboard as JSON, or shows it in a box to copy by hand where the clipboard is refused (in-app
@@ -260,6 +284,23 @@ update variants set status = 'archived' where sku in ('POC-CONCURRENCY', 'POC-LA
 update products set status = 'draft' where slug in ('poc-concurrency', 'poc-latency');
 ```
 
-Finally remove the proof-of-concept code: `poc/` (and its entries in `pnpm-workspace.yaml`, the
-root `package.json` and `vitest.config.ts`), `apps/web/src/pages/poc/`, `poc` in
-`apps/web/src/staff-guard.ts`, and `POC_CONTAINER_URL` in `apps/web/wrangler.jsonc`.
+Finally remove the proof-of-concept code, in one change:
+
+- `poc/` (the runner), and its entries in `pnpm-workspace.yaml`, the root `package.json`
+  (`poc:concurrency`) and the root `vitest.config.ts` (`projects`); then `pnpm install` to update
+  the lockfile.
+- The latency page: `apps/web/src/pages/poc/`, `apps/web/src/poc-latency.ts`,
+  `apps/web/test/poc-latency.test.ts`, the `POC_CONTAINER_URL` and `POC_TOKEN` fields of
+  `WorkerEnv` in `apps/web/src/env.ts`, and `poc` in the staff areas of
+  `apps/web/src/staff-guard.ts` (with its cases in `apps/web/test/staff-guard.test.ts`).
+- `POC_CONTAINER_URL` in `env.poc` of `apps/web/wrangler.jsonc`, and the "proof-of-concept
+  settings" tests in `apps/web/test/wrangler-config.test.ts` (the `vars` check of both
+  environments goes back to exact equality).
+- The container's proof-of-concept parts, **only if the core stays on Workers**:
+  `apps/node-control/src/poc-auth.ts` and its test, its use in `src/server.ts`,
+  `apps/node-control/Dockerfile`, `apps/node-control/fly.toml` and the root `.dockerignore`. If
+  decision 0004 moves the core to the container, they stay, and become the starting point of its
+  deployment (the bearer token is replaced by whatever then stands in front of it).
+- In `docs/decisions/0001-toolchain.md`, the Docker base image row and the
+  "tsx, hono (in `@dose/node-control` and `@dose/poc`)" row, as far as what they describe was removed.
+- This section of the runbook, once the teardown is done.

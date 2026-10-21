@@ -69,6 +69,15 @@ export function interleaved(perTarget: number): Target[] {
   return Array.from({ length: perTarget * 2 }, (_, i) => (i % 2 === 0 ? 'worker' : 'container'));
 }
 
+/**
+ * The measured checkouts, given which targets warmed up (a warm-up is retried once before this):
+ * the W, C, W, C … plan without any target whose warm-up failed twice, since its first measured
+ * checkouts would include the cold start. Empty when neither warmed up.
+ */
+export function measuredPlan(perTarget: number, warmedUp: Record<Target, boolean>): Target[] {
+  return interleaved(perTarget).filter((target) => warmedUp[target]);
+}
+
 /** A test phone `+2011` and eight random digits (the concurrency runner uses `+2010…`, so they never meet). */
 export function latencyTestPhone(random: () => number = Math.random): string {
   const digits = Math.floor(random() * 100_000_000);
