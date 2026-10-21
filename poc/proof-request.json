@@ -1,1 +1,1 @@
-{ "target": "worker", "runs": 1, "start": 1, "concurrency": 200, "units": 10 }
+{ "target": "worker", "runs": 40, "start": 1, "concurrency": 200, "units": 10 }
