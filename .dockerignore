@@ -1,0 +1,22 @@
+# The build context of apps/node-control/Dockerfile (built from the repository root, Task 19):
+# the workspace manifests, the lockfile and the package sources, and nothing else worth sending.
+**/node_modules
+**/dist
+**/.wrangler
+**/.astro
+.git
+.github
+.superpowers
+.claude
+.codex
+docs
+graphify-out
+e2e
+test-results
+playwright-report
+.lighthouseci
+apps/web/public/media
+# Secrets and local settings never enter an image.
+**/.env
+**/.env.*
+**/.dev.vars

@@ -1,0 +1,68 @@
+# dose-node-control: the Node "control" container of the proof of concept (Milestone 1, Task 19),
+# in Frankfurt beside the Neon `poc` branch. Fly.io trial only (decision 0009: about 2 hours of
+# machine time in all), so the one machine runs only while measuring. Destroyed after Gate 1.
+# Full steps: docs/runbooks/environments.md, "Proof of concept (Milestone 1 only)".
+#
+# Every command runs from the repository root, which is the image's build context. The `.` names
+# that working directory, so `--config` does not move the build context to apps/node-control.
+#
+#   Create the app once (no machine yet):
+#     fly apps create dose-node-control
+#   Secrets, from shell variables (never in this file; `secrets import` reads NAME=VALUE lines from
+#   stdin, and printf is a shell builtin, so no value is on a process's command line):
+#     printf 'DATABASE_URL=%s\nPOC_TOKEN=%s\nPOC_ALLOWED_ORIGIN=%s\n' "$DATABASE_URL" "$POC_TOKEN" "$POC_ALLOWED_ORIGIN" \
+#       | fly secrets import --app dose-node-control --stage
+#   Deploy: the image is built here by the local Docker, no remote builder runs; one machine only:
+#     fly deploy . --config apps/node-control/fly.toml --dockerfile apps/node-control/Dockerfile --local-only --ha=false
+#   Start before measuring, stop right after (auto-stop also stops it when idle):
+#     fly machine list --app dose-node-control
+#     fly machine start <machine id> --app dose-node-control
+#     fly machine stop <machine id> --app dose-node-control
+#   After Gate 1, destroy the app and everything in it (machines, secrets, image):
+#     fly apps destroy dose-node-control
+
+app = "dose-node-control"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "10s"
+
+# Not secrets. DATABASE_URL (dose_app on the poc branch), POC_TOKEN and POC_ALLOWED_ORIGIN are
+# Fly secrets, set by the controller.
+[env]
+  ENVIRONMENT = "staging"
+  HOST = "0.0.0.0"
+  PORT = "4010"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 4010
+  # Runs only while measuring: stopped when idle, started by the next request, none kept running.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  # The concurrency runner fires 200 checkouts at once; Fly's default limit (25 connections) would
+  # hold most of them at the proxy and measure the proxy instead of the app.
+  [services.concurrency]
+    type = "requests"
+    soft_limit = 250
+    hard_limit = 300
+
+  # TCP, not HTTP: every path answers 401 without the bearer token, so an HTTP check cannot pass.
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
