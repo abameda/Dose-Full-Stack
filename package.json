@@ -19,6 +19,7 @@
     "env:identity": "pnpm --filter @dose/core run env:identity",
     "staff:add": "pnpm --filter @dose/core run staff:add",
     "stock:receive": "pnpm --filter @dose/core run stock:receive",
+    "poc:concurrency": "pnpm --filter @dose/poc run concurrency",
     "e2e": "playwright test",
     "lhci": "lhci autorun"
   },

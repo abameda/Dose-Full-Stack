@@ -258,13 +258,16 @@ importers:
       '@hono/node-server':
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.13)
+      hono:
+        specifier: 4.13.13
+        version: 4.13.13
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
     devDependencies:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
 
   apps/web:
     dependencies:
@@ -433,6 +436,25 @@ importers:
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
+
+  poc:
+    dependencies:
+      '@dose/contract':
+        specifier: workspace:*
+        version: link:../packages/contract
+      '@dose/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+    devDependencies:
+      '@dose/api':
+        specifier: workspace:*
+        version: link:../packages/api
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
 
 packages:
 

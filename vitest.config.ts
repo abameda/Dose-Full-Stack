@@ -5,6 +5,6 @@ import { defineConfig } from 'vitest/config';
 // `pnpm test:preview` (test/preview/vitest.config.ts), inside .github/workflows/preview.yml.
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'directions/*', 'apps/*', 'test/*', '!test/preview'],
+    projects: ['packages/*', 'directions/*', 'apps/*', 'poc', 'test/*', '!test/preview'],
   },
 });

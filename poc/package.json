@@ -1,0 +1,19 @@
+{
+  "name": "@dose/poc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "concurrency": "tsx concurrency.ts"
+  },
+  "dependencies": {
+    "@dose/contract": "workspace:*",
+    "@dose/core": "workspace:*",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@dose/api": "workspace:*",
+    "@types/node": "24.19.2"
+  }
+}
