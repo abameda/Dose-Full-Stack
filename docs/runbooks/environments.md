@@ -241,7 +241,7 @@ simultaneous requests never get an answer (client-side `ECONNRESET` and connect 
 Cloudflare's addresses on that network), so the runs fail for reasons that have nothing to do with
 the targets. `.github/workflows/poc-concurrency.yml` runs the same command on a GitHub runner,
 checks the evidence holds no secret, writes the runner's lines and every JSON line to the job
-summary and uploads `poc-proof.jsonl` as the artefact `poc-proof-<target>-<start>-<last>`.
+summary and uploads `poc-proof.jsonl` as the artefact `poc-proof-<target>-<start>-<last>-<run id>-<attempt>` (a re-run never replaces earlier evidence).
 
 What it needs (the header of the workflow lists them too):
 
@@ -259,8 +259,9 @@ To run a proof:
    `poc/proof-request.json` on it:
    `{ "target": "worker", "runs": 40, "start": 1, "concurrency": 200, "units": 10 }`. `target` is
    `worker` or `container`; `runs` is 1 to 40; `start` numbers the first run; `concurrency` and
-   `units` are 200 and 10 for the proof. Anything else, a missing key included, fails the job
-   before it contacts anything. A push to a `poc/proof-*` branch runs the workflow of the pushed
+   `units` are always 200 and 10, the proof's numbers. Anything else (another value, a missing or
+   extra key, a file with more than one JSON document) fails the job before it contacts anything,
+   so a green job is always a proof at 200 checkouts for 10 units. A push to a `poc/proof-*` branch runs the workflow of the pushed
    commit, so this works before the workflow is merged to `main`.
 2. Push the branch (the request file is the only change; every push to such a branch runs a proof).
 3. Read the job summary of the run (Actions, "PoC concurrency proof"): the runner's line per run and
@@ -282,13 +283,31 @@ over three days, continuing the numbering: day 1 `"runs": 40`, day 2 `"start": 4
 after day 1 and adjust the split. The container's runs do not touch Hyperdrive and use the same
 split.
 
+Before recording the result (draft decision 0004), check that a target's artefacts together cover
+runs 1 to 100 exactly once, with no gap and no overlap, and that every one of the 100 runs passed.
+List the successful runs and download their artefacts:
+
+```sh
+gh run list --workflow poc-concurrency.yml --limit 30
+# one download per request, into proof-worker-<start> (proof-container-<start> for the container):
+gh run download <run id> --name poc-proof-worker-1-40-<run id>-<attempt> --dir proof-worker-1
+# then, over the downloaded files of one target: the run numbers (1 to 100 once each) and the failures (0)
+jq -s 'map(.run) | sort' proof-worker-*/poc-proof.jsonl
+jq -s 'map(select(.ok | not)) | length' proof-worker-*/poc-proof.jsonl
+```
+
+A failed attempt's artefact stays in its run (and is named with its attempt), so count only the
+attempt whose job passed.
+
 For debugging only, the runner can be run from a shell with the variables exported
 (`POC_OWNER_URL`, and `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` for `--auth access` or
 `POC_TOKEN` for `--auth bearer`); expect the dropped requests described above, so it proves nothing:
 
 ```sh
-pnpm poc:concurrency --target "https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev" --auth access   --runs 1 --concurrency 200 --units 10 --out poc-worker.jsonl
-pnpm poc:concurrency --target https://dose-node-control.fly.dev --auth bearer   --runs 1 --concurrency 200 --units 10 --out poc-container.jsonl
+pnpm poc:concurrency --target "https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev" --auth access \
+  --runs 1 --concurrency 200 --units 10 --out poc-worker.jsonl
+pnpm poc:concurrency --target https://dose-node-control.fly.dev --auth bearer \
+  --runs 1 --concurrency 200 --units 10 --out poc-container.jsonl
 ```
 
 ### The latency page (`/poc/latency`)

@@ -14,16 +14,20 @@
 # same three inputs. Only people who can push branches can run it, with the same secrets as main.
 #
 # The request, poc/proof-request.json in the pushed commit (or the dispatch inputs), nothing else:
-#   { "target": "worker" | "container", "runs": 1..40, "start": 1.., "concurrency": 1..200, "units": 1..concurrency }
+#   { "target": "worker" | "container", "runs": 1..40, "start": 1.., "concurrency": 200, "units": 10 }
 #   - runs is at most 40: the Worker's Hyperdrive free plan allows 100,000 queries a day and one run
 #     of 200 checkouts costs roughly 1,900 of them.
-#   - start numbers the first run, so a proof split over days keeps one numbering and the artefacts
-#     one name each (poc-proof-<target>-<start>-<last>).
-#   - Anything else (an unknown key, a missing one, a string for a number, runs 41, target "staging")
-#     fails the job before anything is installed or contacted.
+#   - concurrency and units are the proof's own numbers, 200 and 10, and nothing else is accepted
+#     (a green job is always a proof at 200 checkouts for 10 units).
+#   - start numbers the first run, so a proof split over days keeps one numbering. The artefact is
+#     poc-proof-<target>-<start>-<last>-<run id>-<attempt>: a re-run never replaces earlier evidence.
+#   - Anything else (an unknown key, a missing one, a string for a number, runs 41, target "staging",
+#     a file holding more than one JSON document) fails the job before anything is installed or
+#     contacted.
 # A 100-run proof is three requests on three days: worker runs 1-40, 41-80, 81-100 (start 1 runs 40,
 # start 41 runs 40, start 81 runs 20). The container's runs do not touch Hyperdrive but use the same
-# split, so each day's evidence is one artefact. The example committed in the repository is one run.
+# split, so each day's evidence is one artefact; together a target's artefacts must cover runs 1-100
+# exactly once. The example committed in the repository is one run.
 #
 # Repository variables (non-secret IDs and URLs):
 #   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account (checked below: no other account is used)
@@ -118,27 +122,29 @@ jobs:
             if ! [[ "$INPUT_RUNS" =~ ^[1-9][0-9]{0,6}$ && "$INPUT_START" =~ ^[1-9][0-9]{0,6}$ ]]; then
               echo "runs and start must be whole numbers of at least 1" >&2; exit 1
             fi
-            request="$(jq -nc --arg target "$INPUT_TARGET" --argjson runs "$INPUT_RUNS" --argjson start "$INPUT_START" \
+            raw="$(jq -nc --arg target "$INPUT_TARGET" --argjson runs "$INPUT_RUNS" --argjson start "$INPUT_START" \
               '{target: $target, runs: $runs, start: $start, concurrency: 200, units: 10}')"
           else
-            if ! request="$(jq -c . poc/proof-request.json)"; then
-              echo "poc/proof-request.json is missing or is not JSON" >&2; exit 1
+            if ! raw="$(cat poc/proof-request.json)"; then
+              echo "poc/proof-request.json is missing" >&2; exit 1
             fi
           fi
-          # Types, ranges and the exact set of keys. runs is at most 40 (Hyperdrive's 100,000 queries a day).
-          if ! jq -e '
-                type == "object"
-                and (keys == ["concurrency", "runs", "start", "target", "units"])
-                and (.target == "worker" or .target == "container")
-                and (.runs | type == "number" and . == floor and . >= 1 and . <= 40)
-                and (.start | type == "number" and . == floor and . >= 1 and . <= 1000000)
-                and (.concurrency | type == "number" and . == floor and . >= 1 and . <= 200)
-                and (.units | type == "number" and . == floor and . >= 1)
-                and .units <= .concurrency
-              ' <<< "$request" > /dev/null; then
-            echo "The request is not { target: worker|container, runs: 1..40, start: >= 1, concurrency: 1..200, units: 1..concurrency } and nothing else: $request" >&2
+          # Exactly one JSON document, then types, ranges and the exact set of keys. runs is at most
+          # 40 (Hyperdrive's 100,000 queries a day); concurrency and units are the proof's 200 and 10.
+          if ! jq -s -e '
+                length == 1 and (.[0] |
+                  type == "object"
+                  and (keys == ["concurrency", "runs", "start", "target", "units"])
+                  and (.target == "worker" or .target == "container")
+                  and (.runs | type == "number" and . == floor and . >= 1 and . <= 40)
+                  and (.start | type == "number" and . == floor and . >= 1 and . <= 1000000)
+                  and (.concurrency == 200 and (.concurrency | type == "number"))
+                  and (.units == 10 and (.units | type == "number")))
+              ' <<< "$raw" > /dev/null 2>&1; then
+            echo "poc/proof-request.json (or the dispatch inputs) is not exactly one JSON document { target: worker|container, runs: 1..40, start: >= 1, concurrency: 200, units: 10 } and nothing else" >&2
             exit 1
           fi
+          request="$(jq -c . <<< "$raw")"
           target="$(jq -r .target <<< "$request")"
           runs="$(jq -r '.runs | floor | tostring' <<< "$request")"
           start="$(jq -r '.start | floor | tostring' <<< "$request")"
@@ -160,12 +166,20 @@ jobs:
           NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
           WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
           POC_CONTAINER_URL: ${{ vars.POC_CONTAINER_URL }}
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          POC_TOKEN: ${{ secrets.POC_TOKEN }}
+          # Only whether each secret is set, never the secret itself.
+          HAS_NEON_API_KEY: ${{ secrets.NEON_API_KEY != '' && 'set' || '' }}
+          HAS_CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID != '' && 'set' || '' }}
+          HAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET != '' && 'set' || '' }}
+          HAS_POC_TOKEN: ${{ secrets.POC_TOKEN != '' && 'set' || '' }}
         run: |
-          # Names only, never values.
+          # Names only, never values. A variable is tested directly, a secret through its HAS_ flag.
+          is_set() {
+            local flag="HAS_$1"
+            case "$1" in
+              NEON_API_KEY|CF_ACCESS_CLIENT_ID|CF_ACCESS_CLIENT_SECRET|POC_TOKEN) [ -n "${!flag}" ] ;;
+              *) [ -n "${!1}" ] ;;
+            esac
+          }
           case "$TARGET" in
             worker) needed=(NEON_NONPROD_PROJECT_ID NEON_API_KEY WORKERS_SUBDOMAIN CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET) ;;
             container) needed=(NEON_NONPROD_PROJECT_ID NEON_API_KEY POC_CONTAINER_URL POC_TOKEN) ;;
@@ -173,7 +187,7 @@ jobs:
           esac
           missing=()
           for name in "${needed[@]}"; do
-            if [ -z "${!name}" ]; then missing+=("$name"); fi
+            if ! is_set "$name"; then missing+=("$name"); fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "Not set (repository variable or secret): ${missing[*]}" >&2
@@ -220,6 +234,14 @@ jobs:
             *) echo "neonctl did not print a postgres connection string" >&2; exit 1 ;;
           esac
           echo "::add-mask::$owner_url"
+          # The password alone too (the runner's output reaches the public log before the leak check
+          # runs): between the first ":" after the scheme and the last "@".
+          userinfo="${owner_url#*://}"
+          userinfo="${userinfo%@*}"
+          owner_password="${userinfo#*:}"
+          if [ -n "$owner_password" ] && [ "$owner_password" != "$userinfo" ]; then
+            echo "::add-mask::$owner_password"
+          fi
           echo "url=$owner_url" >> "$GITHUB_OUTPUT"
 
       # The runner writes its lines to stdout and the evidence to poc-proof.jsonl (a relative --out
@@ -310,6 +332,5 @@ jobs:
         if: ${{ always() && steps.leaks.outcome == 'success' && hashFiles('poc-proof.jsonl') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: poc-proof-${{ steps.request.outputs.target }}-${{ steps.request.outputs.start }}-${{ steps.request.outputs.last }}
+          name: poc-proof-${{ steps.request.outputs.target }}-${{ steps.request.outputs.start }}-${{ steps.request.outputs.last }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: poc-proof.jsonl
-          overwrite: true
