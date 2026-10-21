@@ -109,8 +109,8 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
     expect(env?.name).toBeUndefined(); // wrangler names it dose-web-<env>
   });
 
-  test('is ENVIRONMENT staging, with Access vars to be filled in', () => {
-    expect(env?.vars).toMatchObject({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '' });
+  test('is ENVIRONMENT staging, behind the DÖSE Access team with its own application audience', () => {
+    expect(env?.vars).toMatchObject({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown });
   });
 
   test('has its own Hyperdrive binding, with no local connection string', () => {
@@ -133,11 +133,11 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
 
 describe('the proof-of-concept settings (Task 19)', () => {
   test('only poc has the container URL, empty until the controller fills it in', () => {
-    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '', POC_CONTAINER_URL: '' });
+    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: '7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec', POC_CONTAINER_URL: '' });
   });
 
   test('staging has neither the container URL nor the token', () => {
-    expect(config.env?.['staging']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: '', ACCESS_AUD: '' });
+    expect(config.env?.['staging']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: 'f2378fb4a0874cb43a100ca833aad25eafa1e0fad39ce98471af3c5247227237' });
     expect(Object.keys(config.vars ?? {})).not.toContain('POC_CONTAINER_URL');
   });
 
