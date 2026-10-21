@@ -132,8 +132,8 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
 });
 
 describe('the proof-of-concept settings (Task 19)', () => {
-  test('only poc has the container URL, empty until the controller fills it in', () => {
-    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: '7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec', POC_CONTAINER_URL: '' });
+  test('only poc has the container URL (the Fly.io app)', () => {
+    expect(config.env?.['poc']?.vars).toEqual({ ENVIRONMENT: 'staging', ACCESS_TEAM_DOMAIN: 'nameless-dew-de61.cloudflareaccess.com', ACCESS_AUD: '7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec', POC_CONTAINER_URL: 'https://dose-node-control.fly.dev' });
   });
 
   test('staging has neither the container URL nor the token', () => {

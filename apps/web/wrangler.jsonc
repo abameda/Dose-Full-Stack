@@ -102,7 +102,7 @@
 				"ACCESS_AUD": "7bbd9e2da7241a5490693c269ad71fbca1a151a1fdefb110bbba6599de86faec",
 				// The Node container's origin for /poc/latency (Task 19), filled in when it is deployed. Its
 				// bearer token is the Worker secret POC_TOKEN (`wrangler secret put`), never in this file.
-				"POC_CONTAINER_URL": ""
+				"POC_CONTAINER_URL": "https://dose-node-control.fly.dev"
 			},
 			// No R2 bucket until launch (decision 0011). Wrangler still warns that MEDIA is top-level only.
 			"r2_buckets": [],
