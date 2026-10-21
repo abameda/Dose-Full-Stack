@@ -214,9 +214,13 @@ jobs:
           HYPERDRIVE_ID: ${{ steps.hyperdrive.outputs.id }}
         run: |
           config=apps/web/dist/server/wrangler.json
-          if ! jq -e '.name == "dose-web-staging" and .targetEnvironment == "staging" and .vars.ENVIRONMENT == "staging"
-                      and (.hyperdrive | length == 1 and .[0].binding == "HYPERDRIVE")' "$config" > /dev/null; then
-            echo "$config is not the staging build this step expects" >&2; exit 1
+          # The upload goes to the account named in the built config, which comes from the pull
+          # request's own wrangler.jsonc: the job's account check above does not see it, so it is
+          # checked here too.
+          if ! jq -e --arg account "$CLOUDFLARE_ACCOUNT_ID" \
+                 '.account_id == $account and .name == "dose-web-staging" and .targetEnvironment == "staging" and .vars.ENVIRONMENT == "staging"
+                  and (.hyperdrive | length == 1 and .[0].binding == "HYPERDRIVE")' "$config" > /dev/null; then
+            echo "$config is not the staging build for DÖSE's account that this step expects" >&2; exit 1
           fi
           jq --arg id "$HYPERDRIVE_ID" '.hyperdrive[0].id = $id | .vars.ENVIRONMENT = "preview"' "$config" > "$RUNNER_TEMP/wrangler.json"
           mv "$RUNNER_TEMP/wrangler.json" "$config"
