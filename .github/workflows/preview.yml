@@ -47,7 +47,7 @@ concurrency:
 
 env:
   # The duration gate: the comment must come within this many seconds of the run's start.
-  PREVIEW_MAX_SECONDS: 300
+  PREVIEW_MAX_SECONDS: 10
 
 jobs:
   preview:
