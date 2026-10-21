@@ -172,6 +172,10 @@ The image can be checked locally first: `docker build -f apps/node-control/Docke
 `Authorization: Bearer <POC_TOKEN>`, and anything else is a 401, so Fly's health check is TCP only.
 Smoke it with `curl -H "Authorization: Bearer $POC_TOKEN" "https://dose-node-control.fly.dev/api/products?lang=en"`.
 
+For the concurrency proof from GitHub (below) the container also needs two settings in the
+repository: the variable `POC_CONTAINER_URL` (`https://dose-node-control.fly.dev`) and the secret
+`POC_TOKEN` (the same token as above; the workflow gives it to the runner step only).
+
 **Between measuring sessions the app has no machine at all.** `fly.toml` keeps
 `auto_start_machines = true`, which the measurements need, so a merely stopped machine is started
 again by any request to the public `dose-node-control.fly.dev` (scanners find it; a 401 still
@@ -232,23 +236,60 @@ latency measurement during a burst of 200 checkouts measures a busy database. Th
 Postgres advisory lock on the owner connection for the whole invocation and refuses to start
 while another holds it; nothing stops the latency page, so wait for the runner's summary first.
 
-```sh
-# The Worker, through Access: POC_OWNER_URL, CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET exported
-# (the service token is an active staff member on the poc branch).
-pnpm poc:concurrency --target "https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev" --auth access \
-  --runs 40 --concurrency 200 --units 10 --out poc-worker.jsonl
+**Run it from GitHub, not from a laptop.** From the developer's machine about 7-9% of 200
+simultaneous requests never get an answer (client-side `ECONNRESET` and connect timeouts to
+Cloudflare's addresses on that network), so the runs fail for reasons that have nothing to do with
+the targets. `.github/workflows/poc-concurrency.yml` runs the same command on a GitHub runner,
+checks the evidence holds no secret, writes the runner's lines and every JSON line to the job
+summary and uploads `poc-proof.jsonl` as the artefact `poc-proof-<target>-<start>-<last>`.
 
-# The container (its machine started): POC_OWNER_URL and POC_TOKEN exported.
-pnpm poc:concurrency --target https://dose-node-control.fly.dev --auth bearer \
-  --runs 100 --concurrency 200 --units 10 --out poc-container.jsonl
-```
+What it needs (the header of the workflow lists them too):
+
+- Repository variables: `CLOUDFLARE_ACCOUNT_ID`, `NEON_NONPROD_PROJECT_ID`; for the Worker
+  `WORKERS_SUBDOMAIN`; for the container `POC_CONTAINER_URL` (its origin, for example
+  `https://dose-node-control.fly.dev`).
+- Repository secrets: `NEON_API_KEY` (the job reads the `poc` branch's `dose_owner` connection
+  string itself); for the Worker `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (an active
+  staff member on the `poc` branch); for the container `POC_TOKEN` (the same token the container
+  and the Worker hold). The job names any that is missing before it installs anything.
+
+To run a proof:
+
+1. Create the branch `poc/proof-<target>-<start>` (for example `poc/proof-worker-1`) and edit
+   `poc/proof-request.json` on it:
+   `{ "target": "worker", "runs": 40, "start": 1, "concurrency": 200, "units": 10 }`. `target` is
+   `worker` or `container`; `runs` is 1 to 40; `start` numbers the first run; `concurrency` and
+   `units` are 200 and 10 for the proof. Anything else, a missing key included, fails the job
+   before it contacts anything. A push to a `poc/proof-*` branch runs the workflow of the pushed
+   commit, so this works before the workflow is merged to `main`.
+2. Push the branch (the request file is the only change; every push to such a branch runs a proof).
+3. Read the job summary of the run (Actions, "PoC concurrency proof"): the runner's line per run and
+   summary, then every JSON line. The job fails when any run failed. Download the artefact for the
+   record. After the merge, "Run workflow" on `main` takes the same three inputs (target, runs,
+   start) instead of the file.
+4. Delete the branch afterwards (`git push origin --delete poc/proof-<target>-<start>`).
+
+Only one proof runs at a time (the workflow's concurrency group; a second one waits, and the
+runner's advisory lock refuses a start while another holds the database). The container's machine
+must be started (scaled to one) before a container proof, and scaled to zero after it. Do not open
+the latency page while a proof runs.
 
 Hyperdrive's free plan allows 100,000 queries a day. One run of 200 checkouts costs roughly 1,900
 of them (an estimate from the statements one checkout runs, about 15 for a placed order and 9 for a
-refusal; not yet measured), so the Worker's 100 runs are split over three days, continuing the
-numbering and the evidence file: day 1 `--runs 40`, day 2 `--start 41 --runs 40`, day 3
-`--start 81 --runs 20`. Read the day's query count in the Hyperdrive dashboard after day 1 and
-adjust the split. The container's runs do not touch Hyperdrive.
+refusal; not yet measured), which is why `runs` is at most 40 and the Worker's 100 runs are split
+over three days, continuing the numbering: day 1 `"runs": 40`, day 2 `"start": 41, "runs": 40`, day 3
+`"start": 81, "runs": 20`, one artefact each. Read the day's query count in the Hyperdrive dashboard
+after day 1 and adjust the split. The container's runs do not touch Hyperdrive and use the same
+split.
+
+For debugging only, the runner can be run from a shell with the variables exported
+(`POC_OWNER_URL`, and `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` for `--auth access` or
+`POC_TOKEN` for `--auth bearer`); expect the dropped requests described above, so it proves nothing:
+
+```sh
+pnpm poc:concurrency --target "https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev" --auth access   --runs 1 --concurrency 200 --units 10 --out poc-worker.jsonl
+pnpm poc:concurrency --target https://dose-node-control.fly.dev --auth bearer   --runs 1 --concurrency 200 --units 10 --out poc-container.jsonl
+```
 
 ### The latency page (`/poc/latency`)
 
@@ -286,6 +327,8 @@ update products set status = 'draft' where slug in ('poc-concurrency', 'poc-late
 
 Finally remove the proof-of-concept code, in one change:
 
+- `.github/workflows/poc-concurrency.yml` and `poc/proof-request.json`, and any `poc/proof-*` branch
+  still on GitHub.
 - `poc/` (the runner), and its entries in `pnpm-workspace.yaml`, the root `package.json`
   (`poc:concurrency`) and the root `vitest.config.ts` (`projects`); then `pnpm install` to update
   the lockfile.

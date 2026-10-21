@@ -1,0 +1,315 @@
+# Concurrency proof (Milestone 1, Task 19, belief B4) from a GitHub runner: runs `pnpm poc:concurrency`
+# (poc/concurrency.ts) against the poc Worker or the Node container, and keeps the evidence.
+#
+# Why here: from the developer's machine about 7-9% of 200 simultaneous requests never get an answer
+# (client-side ECONNRESET and connect timeouts to Cloudflare's addresses on that network), so the
+# runs failed for reasons that have nothing to do with the targets. A GitHub runner has no such
+# limit.
+#
+# Why a push trigger: a push uses the workflow file of the pushed commit, so the proof works before
+# anything is merged to main. Push a branch named poc/proof-<target>-<start> (for example
+# poc/proof-worker-1) whose commit edits poc/proof-request.json; every push to such a branch runs the
+# proof, so push the request file and nothing else, then delete the branch. After the merge,
+# "Run workflow" (workflow_dispatch) does the same from main or from a poc/proof-* branch with the
+# same three inputs. Only people who can push branches can run it, with the same secrets as main.
+#
+# The request, poc/proof-request.json in the pushed commit (or the dispatch inputs), nothing else:
+#   { "target": "worker" | "container", "runs": 1..40, "start": 1.., "concurrency": 1..200, "units": 1..concurrency }
+#   - runs is at most 40: the Worker's Hyperdrive free plan allows 100,000 queries a day and one run
+#     of 200 checkouts costs roughly 1,900 of them.
+#   - start numbers the first run, so a proof split over days keeps one numbering and the artefacts
+#     one name each (poc-proof-<target>-<start>-<last>).
+#   - Anything else (an unknown key, a missing one, a string for a number, runs 41, target "staging")
+#     fails the job before anything is installed or contacted.
+# A 100-run proof is three requests on three days: worker runs 1-40, 41-80, 81-100 (start 1 runs 40,
+# start 41 runs 40, start 81 runs 20). The container's runs do not touch Hyperdrive but use the same
+# split, so each day's evidence is one artefact. The example committed in the repository is one run.
+#
+# Repository variables (non-secret IDs and URLs):
+#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account (checked below: no other account is used)
+#   NEON_NONPROD_PROJECT_ID  the Neon project that holds the `poc` branch
+#   WORKERS_SUBDOMAIN        the account's workers.dev subdomain (worker target:
+#                            https://dose-web-poc.<sub>.workers.dev)
+#   POC_CONTAINER_URL        the container's origin (container target, e.g. https://dose-node-control.fly.dev)
+# Repository secrets (credentials):
+#   NEON_API_KEY             reads the poc branch's dose_owner connection string
+#   CF_ACCESS_CLIENT_ID      the Access service token for the Worker (an active staff member on the
+#   CF_ACCESS_CLIENT_SECRET  poc branch); the worker target only
+#   POC_TOKEN                the container's bearer token; the container target only
+# The job checks the variables and secrets its target needs before anything else and names the
+# missing ones (never a value).
+#
+# The repository is public: logs, job summaries and artefacts are world-readable. Each credential is
+# given only to the steps that use it, never to `pnpm install`; the owner connection string is
+# validated (one postgres URL on one line), masked and passed as a step output to the runner step
+# alone (never $GITHUB_ENV). Whatever the outcome, the runner's output and evidence file are first
+# checked for the owner URL, its password, the Access secret and the bearer token (the job fails and
+# publishes nothing if one is there), then written to the job summary and uploaded as an artefact.
+name: PoC concurrency proof
+
+on:
+  push:
+    branches: ['poc/proof-*']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to run the proof
+        type: choice
+        options: [worker, container]
+        required: true
+      runs:
+        description: Number of runs, 1 to 40
+        type: string
+        default: '1'
+        required: true
+      start:
+        description: Number of the first run (1 for a new proof; 41 or 81 to continue one)
+        type: string
+        default: '1'
+        required: true
+
+permissions:
+  contents: read
+
+# Never two proofs at once: they reset the same stock. A proof waiting behind another is replaced by
+# a newer waiting one, never cancelled while running. The runner's advisory lock on the database
+# is the second line of defence.
+concurrency:
+  group: poc-concurrency
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    # This repository only, on main or a poc/proof-* branch (a fork's copy has no secrets and fails
+    # the account check anyway; a branch deletion is not a request).
+    if: >-
+      ${{ github.repository == 'abameda/Dose-Full-Stack' &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/poc/proof-')) &&
+          github.event.deleted != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Use only DÖSE's Cloudflare account (decision 0008)
+        run: |
+          if [ "$CLOUDFLARE_ACCOUNT_ID" != "a61331a1643fa91a513c9cb775d7d619" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID is not DÖSE's Cloudflare account" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Read and check the request
+        id: request
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          # Dispatch inputs reach the script as environment only, never pasted into it.
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_RUNS: ${{ inputs.runs }}
+          INPUT_START: ${{ inputs.start }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if ! [[ "$INPUT_RUNS" =~ ^[1-9][0-9]{0,6}$ && "$INPUT_START" =~ ^[1-9][0-9]{0,6}$ ]]; then
+              echo "runs and start must be whole numbers of at least 1" >&2; exit 1
+            fi
+            request="$(jq -nc --arg target "$INPUT_TARGET" --argjson runs "$INPUT_RUNS" --argjson start "$INPUT_START" \
+              '{target: $target, runs: $runs, start: $start, concurrency: 200, units: 10}')"
+          else
+            if ! request="$(jq -c . poc/proof-request.json)"; then
+              echo "poc/proof-request.json is missing or is not JSON" >&2; exit 1
+            fi
+          fi
+          # Types, ranges and the exact set of keys. runs is at most 40 (Hyperdrive's 100,000 queries a day).
+          if ! jq -e '
+                type == "object"
+                and (keys == ["concurrency", "runs", "start", "target", "units"])
+                and (.target == "worker" or .target == "container")
+                and (.runs | type == "number" and . == floor and . >= 1 and . <= 40)
+                and (.start | type == "number" and . == floor and . >= 1 and . <= 1000000)
+                and (.concurrency | type == "number" and . == floor and . >= 1 and . <= 200)
+                and (.units | type == "number" and . == floor and . >= 1)
+                and .units <= .concurrency
+              ' <<< "$request" > /dev/null; then
+            echo "The request is not { target: worker|container, runs: 1..40, start: >= 1, concurrency: 1..200, units: 1..concurrency } and nothing else: $request" >&2
+            exit 1
+          fi
+          target="$(jq -r .target <<< "$request")"
+          runs="$(jq -r '.runs | floor | tostring' <<< "$request")"
+          start="$(jq -r '.start | floor | tostring' <<< "$request")"
+          last=$((start + runs - 1))
+          {
+            echo "target=$target"
+            echo "runs=$runs"
+            echo "start=$start"
+            echo "last=$last"
+            echo "concurrency=$(jq -r '.concurrency | floor | tostring' <<< "$request")"
+            echo "units=$(jq -r '.units | floor | tostring' <<< "$request")"
+          } >> "$GITHUB_OUTPUT"
+          echo "Request: $request" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the variables and secrets the target needs
+        id: settings
+        env:
+          TARGET: ${{ steps.request.outputs.target }}
+          NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
+          WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+          POC_CONTAINER_URL: ${{ vars.POC_CONTAINER_URL }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          POC_TOKEN: ${{ secrets.POC_TOKEN }}
+        run: |
+          # Names only, never values.
+          case "$TARGET" in
+            worker) needed=(NEON_NONPROD_PROJECT_ID NEON_API_KEY WORKERS_SUBDOMAIN CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET) ;;
+            container) needed=(NEON_NONPROD_PROJECT_ID NEON_API_KEY POC_CONTAINER_URL POC_TOKEN) ;;
+            *) echo "Unknown target" >&2; exit 1 ;;
+          esac
+          missing=()
+          for name in "${needed[@]}"; do
+            if [ -z "${!name}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Not set (repository variable or secret): ${missing[*]}" >&2
+            exit 1
+          fi
+          if [ "$TARGET" = "worker" ]; then
+            if ! [[ "$WORKERS_SUBDOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+              echo "WORKERS_SUBDOMAIN is not a workers.dev subdomain" >&2; exit 1
+            fi
+            url="https://dose-web-poc.$WORKERS_SUBDOMAIN.workers.dev"
+            auth=access
+          else
+            url="${POC_CONTAINER_URL%/}"
+            if ! [[ "$url" =~ ^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$ ]]; then
+              echo "POC_CONTAINER_URL is not an https origin (scheme and host, no path)" >&2; exit 1
+            fi
+            auth=bearer
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "auth=$auth" >> "$GITHUB_OUTPUT"
+          echo "Target: $url ($auth)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Owner connection string of the poc branch
+        id: owner
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
+        run: |
+          owner_url="$(npx -y neonctl@8.0.11 --no-analytics connection-string poc --project-id "$NEON_NONPROD_PROJECT_ID" --role-name dose_owner --database-name dose)"
+          # Exactly one postgres URL on one line, checked before anything uses it (a mask covers one
+          # line only). The messages never include the output.
+          case "$owner_url" in
+            *[[:space:]]*) echo "neonctl printed more than one URL, or more than a URL" >&2; exit 1 ;;
+            postgres://*|postgresql://*) ;;
+            *) echo "neonctl did not print a postgres connection string" >&2; exit 1 ;;
+          esac
+          echo "::add-mask::$owner_url"
+          echo "url=$owner_url" >> "$GITHUB_OUTPUT"
+
+      # The runner writes its lines to stdout and the evidence to poc-proof.jsonl (a relative --out
+      # means where pnpm was run: the repository root). tee keeps the lines for the summary;
+      # pipefail (the shell's default here) keeps the runner's exit code: 1 when any run failed.
+      - name: Concurrency proof
+        env:
+          POC_OWNER_URL: ${{ steps.owner.outputs.url }}
+          CF_ACCESS_CLIENT_ID: ${{ steps.request.outputs.target == 'worker' && secrets.CF_ACCESS_CLIENT_ID || '' }}
+          CF_ACCESS_CLIENT_SECRET: ${{ steps.request.outputs.target == 'worker' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
+          POC_TOKEN: ${{ steps.request.outputs.target == 'container' && secrets.POC_TOKEN || '' }}
+          TARGET_URL: ${{ steps.settings.outputs.url }}
+          AUTH: ${{ steps.settings.outputs.auth }}
+          RUNS: ${{ steps.request.outputs.runs }}
+          START: ${{ steps.request.outputs.start }}
+          CONCURRENCY: ${{ steps.request.outputs.concurrency }}
+          UNITS: ${{ steps.request.outputs.units }}
+        run: |
+          pnpm poc:concurrency --target "$TARGET_URL" --auth "$AUTH" --runs "$RUNS" --start "$START" \
+            --concurrency "$CONCURRENCY" --units "$UNITS" --out poc-proof.jsonl 2>&1 | tee poc-runner.log
+
+      # The repository is public. Nothing is published, to the summary or as an artefact, until the
+      # runner's output and the evidence file are shown to hold none of the secrets. Values are
+      # compared through process substitution, so none is on a command line or printed.
+      - name: Check the evidence holds no secret
+        id: leaks
+        if: ${{ always() }}
+        env:
+          OWNER_URL: ${{ steps.owner.outputs.url }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          POC_TOKEN: ${{ secrets.POC_TOKEN }}
+        run: |
+          # The owner URL's password, as written in the URL: between the first ":" after the scheme
+          # and the last "@".
+          owner_password=""
+          if [ -n "$OWNER_URL" ]; then
+            userinfo="${OWNER_URL#*://}"
+            userinfo="${userinfo%@*}"
+            owner_password="${userinfo#*:}"
+          fi
+          found=0
+          leak() {
+            local name="$1" value="$2" file
+            if [ -z "$value" ]; then return 0; fi
+            for file in poc-proof.jsonl poc-runner.log; do
+              if [ -f "$file" ] && grep -Fq -f <(printf '%s\n' "$value") "$file"; then
+                echo "$file contains $name" >&2
+                found=1
+              fi
+            done
+          }
+          leak "the owner connection string" "$OWNER_URL"
+          leak "the owner password" "$owner_password"
+          leak "the Access client secret" "$CF_ACCESS_CLIENT_SECRET"
+          leak "the bearer token" "$POC_TOKEN"
+          if [ "$found" -ne 0 ]; then exit 1; fi
+
+      - name: Job summary
+        if: ${{ always() && steps.leaks.outcome == 'success' }}
+        env:
+          TARGET: ${{ steps.request.outputs.target }}
+          START: ${{ steps.request.outputs.start }}
+          LAST: ${{ steps.request.outputs.last }}
+        run: |
+          # At most 400,000 bytes of each (a summary may hold 1 MiB).
+          {
+            echo "### Concurrency proof: $TARGET, runs $START to $LAST"
+            echo
+            if [ -f poc-runner.log ]; then
+              echo '```text'
+              head -c 400000 poc-runner.log
+              echo
+              echo '```'
+            else
+              echo "The runner did not start."
+            fi
+            if [ -f poc-proof.jsonl ]; then
+              echo
+              echo "Evidence, one JSON line per run (also the artefact):"
+              echo
+              echo '```json'
+              head -c 400000 poc-proof.jsonl
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evidence
+        if: ${{ always() && steps.leaks.outcome == 'success' && hashFiles('poc-proof.jsonl') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: poc-proof-${{ steps.request.outputs.target }}-${{ steps.request.outputs.start }}-${{ steps.request.outputs.last }}
+          path: poc-proof.jsonl
+          overwrite: true
