@@ -17,6 +17,7 @@
     "migrate": "pnpm --filter @dose/core run migrate",
     "env:identity": "pnpm --filter @dose/core run env:identity",
     "staff:add": "pnpm --filter @dose/core run staff:add",
+    "stock:receive": "pnpm --filter @dose/core run stock:receive",
     "e2e": "playwright test",
     "lhci": "lhci autorun"
   },

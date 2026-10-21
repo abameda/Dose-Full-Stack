@@ -11,7 +11,8 @@ import { ACCESS_HEADERS, APP_URL, OWNER_URL, REMOTE_BASE_URL } from './e2e/suppo
 //
 // With `E2E_BASE_URL` set they run against that deployed environment instead (staging, from
 // .github/workflows/staging.yml): no local Worker, every request carries the Cloudflare Access
-// service-token headers, and only the tests tagged @staging run, on the two phones.
+// service-token headers, only the tests tagged @staging run, on the two phones, and the results
+// go to the console alone.
 
 const PORT = 8788;
 const LOCAL_URL = `http://127.0.0.1:${String(PORT)}`;
@@ -28,6 +29,7 @@ const server = [
 ].join(' && ');
 
 const local: PlaywrightTestConfig = {
+  reporter: process.env['CI'] === undefined ? 'list' : [['list'], ['html', { open: 'never' }]],
   use: { baseURL: LOCAL_URL, trace: 'retain-on-failure' },
   projects: [
     { name: 'iphone', use: { ...devices['iPhone 13'] }, grepInvert: SERIAL },
@@ -51,9 +53,11 @@ const local: PlaywrightTestConfig = {
 };
 
 const remote = (baseURL: string): PlaywrightTestConfig => ({
-  // No traces: a trace records every request's headers, the Access client secret included, and the
-  // report is uploaded as an artefact when a run fails. Screenshots show the page only.
-  use: { baseURL, extraHTTPHeaders: ACCESS_HEADERS, trace: 'off', screenshot: 'only-on-failure' },
+  // The list reporter only, and no traces: an API request's call log and a trace both record every
+  // request header, the Access client secret included. The list goes to the CI step log, where
+  // GitHub masks the secret; nothing is written to a report or uploaded (the repository is public).
+  reporter: 'list',
+  use: { baseURL, extraHTTPHeaders: ACCESS_HEADERS, trace: 'off', screenshot: 'off', video: 'off' },
   projects: [
     { name: 'iphone', use: { ...devices['iPhone 13'] }, grep: STAGING },
     { name: 'pixel', use: { ...devices['Pixel 7'] }, grep: STAGING },
@@ -65,6 +69,5 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: process.env['CI'] !== undefined,
   retries: process.env['CI'] === undefined ? 0 : 1,
-  reporter: process.env['CI'] === undefined ? 'list' : [['list'], ['html', { open: 'never' }]],
   ...(REMOTE_BASE_URL === undefined ? local : remote(REMOTE_BASE_URL)),
 });

@@ -81,7 +81,7 @@ const { values } = parseArgs({
 
 const { target, media, bucket, fresh, 'allow-remote': allowRemote } = values;
 if (target === undefined || target === '') throw new Error('--target <owner database URL> is required');
-const { local } = checkSeedTarget(target, { allowRemote, fresh, production: false });
+const { local } = checkSeedTarget(target, { allowRemote, fresh, neverProduction: true });
 if (media !== 'local' && media !== 'r2' && media !== 'none') throw new Error('--media must be local, r2 or none');
 // R2's own naming rule; it also keeps the name safe on the Windows command line above.
 if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) throw new Error('--bucket is not a valid R2 bucket name');

@@ -3,8 +3,8 @@ import { checkSeedTarget } from './target';
 
 const LOCAL = 'postgres://dose_owner:dose_owner_local@127.0.0.1:54329/dose_e2e';
 const REMOTE = 'postgres://dose_owner:secret@ep-staging-123.eu-central-1.aws.neon.tech/dose';
-const SEED = { production: false } as const;
-const ANY = { production: true } as const;
+const SEED = { neverProduction: true } as const;
+const ANY = { neverProduction: false } as const;
 
 describe('checkSeedTarget', () => {
   it.each(['localhost', '127.0.0.1', '[::1]'])('treats %s as local', (host) => {
@@ -17,15 +17,14 @@ describe('checkSeedTarget', () => {
 
   it('refuses a non-local target without --allow-remote, in words that fit every tool', () => {
     expect(() => checkSeedTarget(REMOTE, { allowRemote: false, fresh: false, ...ANY })).toThrow(
-      'ep-staging-123.eu-central-1.aws.neon.tech is not a local database; pass --allow-remote to write to it',
+      /^ep-staging-123\.eu-central-1\.aws\.neon\.tech is not a local database; pass --allow-remote to write to it$/,
     );
   });
 
   it('adds "never production" only for a tool that may never write to production', () => {
     expect(() => checkSeedTarget(REMOTE, { allowRemote: false, fresh: false, ...SEED })).toThrow(
-      'pass --allow-remote to write to it (never production)',
+      /^ep-staging-123\.eu-central-1\.aws\.neon\.tech is not a local database; pass --allow-remote to write to it \(never production\)$/,
     );
-    expect(() => checkSeedTarget(REMOTE, { allowRemote: false, fresh: false, ...ANY })).not.toThrow(/production/);
   });
 
   it('writes to a non-local target only with --allow-remote, and never as local', () => {

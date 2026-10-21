@@ -23,7 +23,7 @@ if (target === undefined || target === '') throw new Error('--target <owner data
 if (name === undefined || !isEnvIdentity(name)) {
   throw new Error('--name must be production, or nonprod:seed, nonprod:staging, nonprod:poc or nonprod:preview/pr-<n>');
 }
-checkSeedTarget(target, { allowRemote, fresh: false, production: true });
+checkSeedTarget(target, { allowRemote, fresh: false, neverProduction: false });
 
 const db = createRequestDb(target);
 try {

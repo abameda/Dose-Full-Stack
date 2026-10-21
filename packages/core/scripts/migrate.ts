@@ -19,7 +19,7 @@ const { values } = parseArgs({
 
 const { target, 'allow-remote': allowRemote } = values;
 if (target === undefined || target === '') throw new Error('--target <owner database URL> is required');
-checkSeedTarget(target, { allowRemote, fresh: false, production: true });
+checkSeedTarget(target, { allowRemote, fresh: false, neverProduction: false });
 
 const applied = await migrate(target);
 for (const name of applied) console.log(`migrate: applied ${name}`);

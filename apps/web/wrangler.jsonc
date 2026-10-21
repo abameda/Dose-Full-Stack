@@ -38,7 +38,8 @@
   "triggers": { "crons": ["*/5 * * * *"] },
   "observability": { "enabled": true },
   // Bindings and vars are not inherited by environments, so each declares all of its own. Neither
-  // has an R2 bucket: until launch the build serves the seed photos as static assets (decision 0011).
+  // has an R2 bucket (an empty list): until launch the build serves the seed photos as static
+  // assets (decision 0011).
   // The placement hint keeps the Worker beside the Neon database in Frankfurt (belief B1).
   "env": {
     // dose-web-staging: deployed from main by .github/workflows/staging.yml.
@@ -50,6 +51,8 @@
         "ACCESS_TEAM_DOMAIN": "",
         "ACCESS_AUD": ""
       },
+      // No R2 bucket until launch (decision 0011). Wrangler still warns that MEDIA is top-level only.
+      "r2_buckets": [],
       "placement": { "region": "aws:eu-central-1" },
       "triggers": { "crons": ["*/5 * * * *"] },
       "observability": { "enabled": true }
@@ -63,6 +66,8 @@
         "ACCESS_TEAM_DOMAIN": "",
         "ACCESS_AUD": ""
       },
+      // No R2 bucket until launch (decision 0011). Wrangler still warns that MEDIA is top-level only.
+      "r2_buckets": [],
       "placement": { "region": "aws:eu-central-1" },
       "triggers": { "crons": [] },
       "observability": { "enabled": true }

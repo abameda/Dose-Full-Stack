@@ -118,7 +118,7 @@ describe.each(['staging', 'poc'])('the %s environment', (name) => {
   });
 
   test('has no R2 bucket (decision 0011)', () => {
-    expect(env?.r2_buckets).toBeUndefined();
+    expect(env?.r2_buckets).toEqual([]);
   });
 
   test('is placed beside the database in Frankfurt (belief B1)', () => {

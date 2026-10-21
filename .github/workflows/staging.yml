@@ -1,9 +1,10 @@
-# Staging: after CI passes on main (or when run by hand), migrates the staging database, builds and
-# deploys the `staging` Worker (dose-web-staging), then runs the @staging end-to-end tests against
-# it through Cloudflare Access. See docs/runbooks/environments.md.
+# Staging: after CI passes for a push to main in this repository (or when run by hand on an allowed
+# branch), migrates the staging database, tops up the stock the tests order, builds and deploys the
+# `staging` Worker (dose-web-staging), then runs the @staging end-to-end tests against it through
+# Cloudflare Access. See docs/runbooks/environments.md.
 #
 # Repository variables (non-secret IDs and URLs):
-#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account
+#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account (checked below: no other account is deployed to)
 #   NEON_NONPROD_PROJECT_ID  the Neon project that holds the `staging` branch
 #   STAGING_URL              the staging Worker's URL
 #   E2E_STAFF_NAME           the staff name of the Access service token (as `pnpm staff:add --name`)
@@ -13,8 +14,11 @@
 #   CF_ACCESS_CLIENT_ID      the Access service token the tests sign in with (an owner in staff)
 #   CF_ACCESS_CLIENT_SECRET
 #
-# The credentials are given only to the steps that use them, never to `pnpm install`. No step
-# prints a secret or the connection string.
+# Each credential is given only to the steps that use it, never to `pnpm install`: the API keys and
+# the Access token as step env, the staging owner URL as a masked step output passed to the migrate
+# and stock steps alone. No step prints a secret or the connection string, and no artefact is
+# uploaded: the repository is public, and a Playwright report or trace would hold the Access secret
+# (the tests report to this log only, where it is masked).
 name: Staging
 
 on:
@@ -33,17 +37,37 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # `branches: [main]` on workflow_run matches only the head branch's name, which a pull request
+    # from a fork's own `main` also has, and CI runs for pull requests. So the run must also be a
+    # push, to main, in this repository: fork code never gets these secrets.
+    # By hand: main only, and m1/environments-and-proof until it is merged (the controller proves
+    # the workflow from that branch first). Remove the second ref when the branch is merged.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+           (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/m1/environments-and-proof')) ||
+          (github.event_name == 'workflow_run' &&
+           github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.event == 'push' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
     steps:
+      - name: Deploy only to DÖSE's Cloudflare account (decision 0008)
+        run: |
+          if [ "$CLOUDFLARE_ACCOUNT_ID" != "a61331a1643fa91a513c9cb775d7d619" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID is not DÖSE's Cloudflare account" >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           # The commit CI tested, not whatever main is now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -55,16 +79,32 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Owner connection string of the staging branch
+        id: owner
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
-          owner_url="$(npx -y neonctl@8.0.11 connection-string staging --project-id "$NEON_NONPROD_PROJECT_ID" --role-name dose_owner --database-name dose)"
-          if [ -z "$owner_url" ]; then echo "neonctl returned no connection string" >&2; exit 1; fi
+          owner_url="$(npx -y neonctl@8.0.11 connection-string staging --project-id "$NEON_NONPROD_PROJECT_ID" --role-name dose_owner --database-name dose --no-analytics)"
+          # Exactly one postgres URL on one line, checked before anything uses it (a mask covers one
+          # line only). The messages never include the output.
+          case "$owner_url" in
+            *[[:space:]]*) echo "neonctl printed more than one URL, or more than a URL" >&2; exit 1 ;;
+            postgres://*|postgresql://*) ;;
+            *) echo "neonctl did not print a postgres connection string" >&2; exit 1 ;;
+          esac
           echo "::add-mask::$owner_url"
-          echo "OWNER_URL=$owner_url" >> "$GITHUB_ENV"
+          echo "url=$owner_url" >> "$GITHUB_OUTPUT"
 
       - name: Migrate the staging database
         run: pnpm migrate --target "$OWNER_URL" --allow-remote
+        env:
+          OWNER_URL: ${{ steps.owner.outputs.url }}
+
+      # Confirmed orders keep their stock in Milestone 1, so every run tops up the SKU the @staging
+      # tests order (Blanc): 4 orders a run (2 languages x 2 phones), 8 with the CI retry, plus margin.
+      - name: Top up the stock the tests order
+        run: pnpm stock:receive --target "$OWNER_URL" --allow-remote --sku BLANC-50ML --units 10 --source-key "staging-topup:${{ github.run_id }}-${{ github.run_attempt }}"
+        env:
+          OWNER_URL: ${{ steps.owner.outputs.url }}
 
       - name: Build the staging Worker
         run: pnpm --filter @dose/web build
@@ -85,12 +125,3 @@ jobs:
           E2E_STAFF_NAME: ${{ vars.E2E_STAFF_NAME }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-
-      - name: Upload the Playwright report
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-staging
-          path: playwright-report/
-          if-no-files-found: ignore
-          retention-days: 14

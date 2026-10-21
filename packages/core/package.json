@@ -32,7 +32,8 @@
     "seed:media": "tsx scripts/seed-media.ts",
     "migrate": "tsx scripts/migrate.ts",
     "env:identity": "tsx scripts/env-identity.ts",
-    "staff:add": "tsx scripts/staff-add.ts"
+    "staff:add": "tsx scripts/staff-add.ts",
+    "stock:receive": "tsx scripts/stock-receive.ts"
   },
   "dependencies": {
     "@dose/contract": "workspace:*",

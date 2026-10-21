@@ -185,4 +185,20 @@ describe('writeSeedMediaAssets', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('writes the same files with the same bytes every time (on one machine)', async () => {
+    const first = await mkdtemp(join(tmpdir(), 'dose-media-a-'));
+    const second = await mkdtemp(join(tmpdir(), 'dose-media-b-'));
+    try {
+      const keys = await writeSeedMediaAssets(pathToFileURL(first));
+      expect(await writeSeedMediaAssets(pathToFileURL(second))).toEqual(keys);
+      expect(await filesUnder(second)).toEqual(await filesUnder(first));
+      for (const key of keys) {
+        expect(new Uint8Array(await readFile(join(second, key)))).toEqual(new Uint8Array(await readFile(join(first, key))));
+      }
+    } finally {
+      await rm(first, { recursive: true, force: true });
+      await rm(second, { recursive: true, force: true });
+    }
+  });
 });

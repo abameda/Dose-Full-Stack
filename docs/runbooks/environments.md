@@ -40,8 +40,9 @@ Notes:
   (`seed:media`), so they are served as static assets at `/media/<key>` with
   `apps/web/public/_headers`; the cloud environments have no R2 bucket until launch
   (decision 0011). Seed their database with `pnpm seed --media none`.
-- The build prints a warning that `r2_buckets` exists at the top level but not on the
-  environment. That is intended (decision 0011).
+- Each environment declares `"r2_buckets": []` (decision 0011). Wrangler 4.147.0 still warns
+  during the build that the top-level `MEDIA` binding is "not on env.<name>". That is intended:
+  the top-level bucket is local development's.
 - The Astro adapter adds a `SESSION` KV namespace binding without an ID (Astro sessions; the app
   does not use them). Wrangler 4.147.0's resource provisioning (`provisionBindings`) handles a
   binding without an ID on a real deploy, so expect it to create or ask for a KV namespace on the

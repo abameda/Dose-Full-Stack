@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
 // The web app shell, served by `wrangler dev` from the built Worker against the seeded local
@@ -56,6 +57,24 @@ test('a seeded image is served from R2 as an immutable image', async ({ request 
   expect(response.headers()['content-type']).toMatch(/^image\//);
   expect(response.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
   expect((await response.body()).length).toBeGreaterThan(0);
+});
+
+// Also on staging: there the database rows come from the seed run on one machine and the files from
+// the build on another (decision 0011), so this is where a difference in the re-encoded bytes would show.
+test('every product image the API lists is served as a JPEG whose bytes match its key', { tag: '@staging' }, async ({ request }) => {
+  const products = (await (await request.get('/api/products?lang=en')).json()) as ProductSummary[];
+  expect(products.map((p) => p.slug).sort()).toEqual(['blanc', 'paradise']);
+  const sources = products.flatMap((p) => p.images.map((i) => i.src));
+  expect(sources.length).toBeGreaterThanOrEqual(products.length);
+  for (const src of sources) {
+    const hash = /^\/media\/products\/[a-z0-9-]+\/([0-9a-f]{64})\.jpg$/.exec(src)?.[1];
+    expect(hash, src).toBeDefined();
+    const response = await request.get(src);
+    expect(response.status(), src).toBe(200);
+    expect(response.headers()['content-type'], src).toBe('image/jpeg');
+    expect(response.headers()['cache-control'], src).toBe('public, max-age=31536000, immutable');
+    expect(createHash('sha256').update(await response.body()).digest('hex'), src).toBe(hash);
+  }
 });
 
 test('an unknown media key is not found', async ({ request }) => {
