@@ -1,0 +1,292 @@
+# Preview: for every pull request from this repository, a preview of the change on its own nonprod
+# database. It creates (or reuses) the Neon branch `preview/pr-<n>` from `seed`, migrates it and
+# names it, creates (or reuses) the Hyperdrive config `dose-pr-<n>` for it, uploads the change as a
+# version of the dose-web-staging Worker with that Hyperdrive binding and the preview alias
+# `pr-<n>`, runs the isolation test (test/preview) against it and comments the preview URL on the
+# pull request. The run fails when the comment comes more than PREVIEW_MAX_SECONDS after the start.
+# .github/workflows/preview-cleanup.yml deletes the branch and the config when the pull request
+# closes. See docs/runbooks/environments.md ("Previews").
+#
+# A preview version is uploaded, never deployed: staging keeps serving its own deployed version,
+# and the preview runs no cron (triggers belong to the deployed version).
+#
+# Repository variables (non-secret IDs and names):
+#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account (checked below: no other account is used)
+#   NEON_NONPROD_PROJECT_ID  the Neon project of the nonprod branches (seed, staging, poc, previews)
+#   PROD_DB_HOST             the production endpoint's host; the isolation test checks the preview's
+#                            credentials are refused there
+#   WORKERS_SUBDOMAIN        the account's workers.dev subdomain (<sub> in <worker>.<sub>.workers.dev)
+# Repository secrets (credentials):
+#   CLOUDFLARE_API_TOKEN       Hyperdrive configs and Worker version uploads
+#   NEON_API_KEY               the preview branch, its owner connection string, the endpoint list
+#   DOSE_APP_PASSWORD_NONPROD  the dose_app password on every nonprod branch (Hyperdrive's login, and
+#                              the isolation test's)
+#   CF_ACCESS_CLIENT_ID        the Access service token the isolation test signs in with (an active
+#   CF_ACCESS_CLIENT_SECRET    staff member in seed, so in every preview branch)
+# Also GITHUB_TOKEN (automatic), for the pull request comment.
+#
+# The repository is public, so its logs are world-readable. Each credential is given only to the
+# steps that use it, never to `pnpm install` or the build; anything derived from one (the owner URL,
+# the dose_app URL) is masked before use and never printed; no artefact is uploaded. Pull requests
+# from forks get no run at all (no secrets there).
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One run per pull request; a new push cancels the run for the previous one. Cleanup shares the
+# group, so closing the pull request also cancels a preview still being set up.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # The duration gate: the comment must come within this many seconds of the run's start.
+  PREVIEW_MAX_SECONDS: 300
+
+jobs:
+  preview:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
+      PROD_DB_HOST: ${{ vars.PROD_DB_HOST }}
+      WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      NEON_BRANCH: preview/pr-${{ github.event.pull_request.number }}
+      HYPERDRIVE_NAME: dose-pr-${{ github.event.pull_request.number }}
+      PREVIEW_ALIAS: pr-${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Record the start time
+        id: start
+        run: echo "epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Use only DÖSE's Cloudflare account (decision 0008)
+        run: |
+          if [ "$CLOUDFLARE_ACCOUNT_ID" != "a61331a1643fa91a513c9cb775d7d619" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID is not DÖSE's Cloudflare account" >&2
+            exit 1
+          fi
+          for name in NEON_NONPROD_PROJECT_ID PROD_DB_HOST WORKERS_SUBDOMAIN; do
+            if [ -z "${!name}" ]; then echo "The repository variable $name is not set" >&2; exit 1; fi
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          # The pull request's head commit, which the comment names (not the merge commit).
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Neon branch preview/pr-<n> (create from seed, or reuse)
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          neon() { npx -y neonctl@8.0.11 "$@" --project-id "$NEON_NONPROD_PROJECT_ID" --no-analytics; }
+          # Exact name match only: no other branch is ever touched.
+          matches="$(neon branches list --output json | jq --arg name "$NEON_BRANCH" '[.[] | select(.name == $name)] | length')"
+          case "$matches" in
+            0)
+              # --no-secrets keeps the connection URIs out of the output, which is discarded anyway.
+              neon branches create --name "$NEON_BRANCH" --parent seed --no-secrets --output json > /dev/null
+              echo "Neon branch \`$NEON_BRANCH\`: created from \`seed\`" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              echo "Neon branch \`$NEON_BRANCH\`: reused" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *) echo "Expected at most one Neon branch named $NEON_BRANCH, found $matches" >&2; exit 1 ;;
+          esac
+
+      - name: Owner connection string of the preview branch
+        id: owner
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          owner_url="$(npx -y neonctl@8.0.11 connection-string "$NEON_BRANCH" --project-id "$NEON_NONPROD_PROJECT_ID" --role-name dose_owner --database-name dose --no-analytics)"
+          # Exactly one postgres URL on one line, checked before anything uses it (a mask covers one
+          # line only). The messages never include the output.
+          case "$owner_url" in
+            *[[:space:]]*) echo "neonctl printed more than one URL, or more than a URL" >&2; exit 1 ;;
+            postgres://*|postgresql://*) ;;
+            *) echo "neonctl did not print a postgres connection string" >&2; exit 1 ;;
+          esac
+          echo "::add-mask::$owner_url"
+          # The branch's read-write endpoint host (not a secret): Hyperdrive's origin and the test's.
+          host="$(OWNER_URL="$owner_url" node -e 'process.stdout.write(new URL(process.env.OWNER_URL).hostname)')"
+          if ! [[ "$host" =~ ^ep-[a-z0-9-]+(\.[a-z0-9-]+)*\.neon\.tech$ ]]; then
+            echo "The preview branch's endpoint host is not a Neon endpoint host" >&2; exit 1
+          fi
+          if [ "$host" = "$PROD_DB_HOST" ]; then
+            echo "The preview branch's endpoint host is the production host" >&2; exit 1
+          fi
+          echo "url=$owner_url" >> "$GITHUB_OUTPUT"
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+
+      # Before the build, so a schema change in this pull request is applied before its code runs.
+      - name: Migrate the preview database
+        run: pnpm migrate --target "$OWNER_URL" --allow-remote
+        env:
+          OWNER_URL: ${{ steps.owner.outputs.url }}
+
+      # Written when the branch is new. Also run when it is reused: the write is idempotent, and a
+      # run cancelled between creating the branch and this step (a new push cancels the run) would
+      # otherwise leave the branch calling itself `nonprod:seed`, inherited from its parent.
+      - name: Name the preview database (env_identity)
+        run: pnpm env:identity --target "$OWNER_URL" --allow-remote --name "nonprod:$NEON_BRANCH"
+        env:
+          OWNER_URL: ${{ steps.owner.outputs.url }}
+
+      - name: Hyperdrive config dose-pr-<n> (create, or reuse)
+        id: hyperdrive
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DOSE_APP_PASSWORD: ${{ secrets.DOSE_APP_PASSWORD_NONPROD }}
+          PREVIEW_DB_HOST: ${{ steps.owner.outputs.host }}
+        run: |
+          configs_url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/hyperdrive/configs"
+          # Cloudflare API call; prints the response's `result`, or its `errors` and fails.
+          cf() {
+            local response
+            response="$(curl -sS -X "$1" "$2" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "${@:3}")"
+            if [ "$(jq -r '.success' <<< "$response")" != "true" ]; then
+              echo "Cloudflare API $1 failed: $(jq -c '.errors' <<< "$response")" >&2
+              return 1
+            fi
+            jq -c '.result' <<< "$response"
+          }
+          # The whole config: dose_app on the branch's `dose` database, caching disabled. The password
+          # is read by jq from the environment, so it is never on a command line.
+          config_body() {
+            jq -n --arg name "$HYPERDRIVE_NAME" --arg host "$PREVIEW_DB_HOST" \
+              '{name: $name,
+                origin: {scheme: "postgres", host: $host, port: 5432, database: "dose", user: "dose_app", password: env.DOSE_APP_PASSWORD},
+                caching: {disabled: true}}'
+          }
+          # Exact name match only: no other config is ever touched.
+          matches="$(cf GET "$configs_url" | jq -c --arg name "$HYPERDRIVE_NAME" '[.[] | select(.name == $name)]')"
+          case "$(jq length <<< "$matches")" in
+            0)
+              id="$(config_body | cf POST "$configs_url" --data-binary @- | jq -r '.id')"
+              echo "Hyperdrive config \`$HYPERDRIVE_NAME\`: created" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              id="$(jq -r '.[0].id' <<< "$matches")"
+              if [ "$(jq -r '.[0].origin.host' <<< "$matches")" != "$PREVIEW_DB_HOST" ]; then
+                config_body | cf PUT "$configs_url/$id" --data-binary @- > /dev/null
+                echo "Hyperdrive config \`$HYPERDRIVE_NAME\`: reused, origin host updated" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "Hyperdrive config \`$HYPERDRIVE_NAME\`: reused" >> "$GITHUB_STEP_SUMMARY"
+              fi
+              ;;
+            *) echo "Expected at most one Hyperdrive config named $HYPERDRIVE_NAME" >&2; exit 1 ;;
+          esac
+          if ! [[ "$id" =~ ^[0-9a-f]{32}$ ]]; then echo "Cloudflare returned no Hyperdrive config ID" >&2; exit 1; fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # Staging's build (its Access vars, placement, compatibility settings), then the preview's own
+      # bindings: its Hyperdrive config and ENVIRONMENT=preview. Nothing else changes.
+      - name: Build the preview
+        run: pnpm --filter @dose/web build
+        env:
+          CLOUDFLARE_ENV: staging
+
+      - name: Give the build the preview's bindings
+        env:
+          HYPERDRIVE_ID: ${{ steps.hyperdrive.outputs.id }}
+        run: |
+          config=apps/web/dist/server/wrangler.json
+          if ! jq -e '.name == "dose-web-staging" and .targetEnvironment == "staging" and .vars.ENVIRONMENT == "staging"
+                      and (.hyperdrive | length == 1 and .[0].binding == "HYPERDRIVE")' "$config" > /dev/null; then
+            echo "$config is not the staging build this step expects" >&2; exit 1
+          fi
+          jq --arg id "$HYPERDRIVE_ID" '.hyperdrive[0].id = $id | .vars.ENVIRONMENT = "preview"' "$config" > "$RUNNER_TEMP/wrangler.json"
+          mv "$RUNNER_TEMP/wrangler.json" "$config"
+          jq -c '{name, targetEnvironment, ENVIRONMENT: .vars.ENVIRONMENT, hyperdrive}' "$config"
+
+      # Without --env: the build already chose the environment (docs/runbooks/environments.md).
+      - name: Upload the preview version (alias pr-<n>)
+        id: upload
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
+        run: |
+          pnpm --filter @dose/web exec wrangler versions upload --preview-alias "$PREVIEW_ALIAS" \
+            --message "PR #$PR_NUMBER at ${HEAD_SHA:0:7}"
+          url="$(jq -r 'select(.type == "version-upload") | .preview_alias_url // empty' "$WRANGLER_OUTPUT_FILE_PATH" | tail -n 1)"
+          if [ -z "$url" ]; then url="https://$PREVIEW_ALIAS-dose-web-staging.$WORKERS_SUBDOMAIN.workers.dev"; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Isolation test
+        env:
+          PREVIEW_URL: ${{ steps.upload.outputs.url }}
+          PREVIEW_DB_HOST: ${{ steps.owner.outputs.host }}
+          DOSE_APP_PASSWORD: ${{ secrets.DOSE_APP_PASSWORD_NONPROD }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          # dose_app on the preview branch, built here so it exists in this step only.
+          # encodeURIComponent, not the URL password setter, which leaves `%` as it is.
+          PREVIEW_APP_URL="$(node -e '
+            const { PREVIEW_DB_HOST: host, DOSE_APP_PASSWORD: password } = process.env;
+            process.stdout.write(`postgresql://dose_app:${encodeURIComponent(password)}@${host}/dose?sslmode=verify-full`);
+          ')"
+          echo "::add-mask::$PREVIEW_APP_URL"
+          export PREVIEW_APP_URL
+          pnpm test:preview
+
+      - name: Comment the preview URL on the pull request
+        id: comment
+        uses: actions/github-script@v7
+        env:
+          START_EPOCH: ${{ steps.start.outputs.epoch }}
+          PREVIEW_URL: ${{ steps.upload.outputs.url }}
+        with:
+          script: |
+            const marker = '<!-- dose-preview -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const seconds = Math.round(Date.now() / 1000) - Number(process.env.START_EPOCH);
+            const body = [
+              marker,
+              `**Preview:** ${process.env.PREVIEW_URL}`,
+              '',
+              `Commit \`${process.env.HEAD_SHA}\`, ready ${seconds} s after the run started ` +
+                `(limit ${process.env.PREVIEW_MAX_SECONDS} s). Database: Neon branch \`${process.env.NEON_BRANCH}\`. ` +
+                'Behind Cloudflare Access.',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const mine = comments.find((c) => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            core.setOutput('seconds', String(seconds));
+
+      - name: Duration gate (at most PREVIEW_MAX_SECONDS from start to comment)
+        env:
+          SECONDS_TAKEN: ${{ steps.comment.outputs.seconds }}
+        run: |
+          echo "Preview ready in **${SECONDS_TAKEN} s** (limit ${PREVIEW_MAX_SECONDS} s)." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SECONDS_TAKEN" -gt "$PREVIEW_MAX_SECONDS" ]; then
+            echo "The preview took ${SECONDS_TAKEN} s, more than ${PREVIEW_MAX_SECONDS} s" >&2
+            exit 1
+          fi

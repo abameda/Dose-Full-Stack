@@ -1,0 +1,98 @@
+# Preview cleanup: when a pull request from this repository closes (merged or not), deletes its
+# preview's Neon branch `preview/pr-<n>` and Hyperdrive config `dose-pr-<n>`, matched by exact
+# name, so no other branch or config is ever touched. A missing one counts as deleted, so a re-run
+# passes. The uploaded Worker version and its `pr-<n>` alias stay: versions are not deleted one by
+# one, and without its Hyperdrive config the version reaches no database. See
+# docs/runbooks/environments.md ("Previews").
+#
+# Repository variables (non-secret IDs):
+#   CLOUDFLARE_ACCOUNT_ID    DÖSE's Cloudflare account (checked below: no other account is used)
+#   NEON_NONPROD_PROJECT_ID  the Neon project of the preview branches
+# Repository secrets (credentials):
+#   CLOUDFLARE_API_TOKEN     deletes the Hyperdrive config
+#   NEON_API_KEY             deletes the Neon branch
+#
+# No code from the pull request is checked out or run here.
+name: Preview cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+# The preview's group: a preview run still setting up this pull request is cancelled first, so it
+# cannot create anything after this run has deleted it.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      NEON_NONPROD_PROJECT_ID: ${{ vars.NEON_NONPROD_PROJECT_ID }}
+      NEON_BRANCH: preview/pr-${{ github.event.pull_request.number }}
+      HYPERDRIVE_NAME: dose-pr-${{ github.event.pull_request.number }}
+    steps:
+      - name: Use only DÖSE's Cloudflare account (decision 0008)
+        run: |
+          if [ "$CLOUDFLARE_ACCOUNT_ID" != "a61331a1643fa91a513c9cb775d7d619" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID is not DÖSE's Cloudflare account" >&2
+            exit 1
+          fi
+          if [ -z "$NEON_NONPROD_PROJECT_ID" ]; then echo "The repository variable NEON_NONPROD_PROJECT_ID is not set" >&2; exit 1; fi
+
+      # neonctl needs Node; the version of .nvmrc, without checking out the pull request.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Delete the Neon branch preview/pr-<n>
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          neon() { npx -y neonctl@8.0.11 "$@" --project-id "$NEON_NONPROD_PROJECT_ID" --no-analytics; }
+          ids="$(neon branches list --output json | jq -r --arg name "$NEON_BRANCH" '.[] | select(.name == $name) | .id')"
+          if [ -z "$ids" ]; then
+            echo "Neon branch \`$NEON_BRANCH\`: not found (nothing to delete)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for id in $ids; do
+            # By the ID of the exact-name match, never by a name neonctl might resolve otherwise.
+            neon branches delete "$id" > /dev/null
+            echo "Neon branch \`$NEON_BRANCH\` (\`$id\`): deleted" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Delete the Hyperdrive config dose-pr-<n>
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          configs_url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/hyperdrive/configs"
+          # Cloudflare API call; prints the response's `result`, or its `errors` and fails.
+          cf() {
+            local response
+            response="$(curl -sS -X "$1" "$2" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+            if [ "$(jq -r '.success' <<< "$response")" != "true" ]; then
+              echo "Cloudflare API $1 failed: $(jq -c '.errors' <<< "$response")" >&2
+              return 1
+            fi
+            jq -c '.result' <<< "$response"
+          }
+          ids="$(cf GET "$configs_url" | jq -r --arg name "$HYPERDRIVE_NAME" '.[] | select(.name == $name) | .id')"
+          if [ -z "$ids" ]; then
+            echo "Hyperdrive config \`$HYPERDRIVE_NAME\`: not found (nothing to delete)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for id in $ids; do
+            if ! [[ "$id" =~ ^[0-9a-f]{32}$ ]]; then echo "Unexpected Hyperdrive config ID" >&2; exit 1; fi
+            cf DELETE "$configs_url/$id" > /dev/null
+            echo "Hyperdrive config \`$HYPERDRIVE_NAME\` (\`$id\`): deleted" >> "$GITHUB_STEP_SUMMARY"
+          done

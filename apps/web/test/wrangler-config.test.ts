@@ -41,6 +41,7 @@ interface WorkerConfig {
   placement?: Record<string, string>;
   triggers?: { crons: string[] };
   observability?: { enabled: boolean };
+  preview_urls?: boolean;
   env?: Record<string, WorkerConfig>;
 }
 
@@ -137,6 +138,12 @@ test('the two environments use different Hyperdrive configs', () => {
 test('only staging runs the cron', () => {
   expect(config.env?.['staging']?.triggers).toEqual({ crons: ['*/5 * * * *'] });
   expect(config.env?.['poc']?.triggers).toEqual({ crons: [] });
+});
+
+test('only staging serves preview URLs (each pull request preview is a version of dose-web-staging)', () => {
+  expect(config.env?.['staging']?.preview_urls).toBe(true);
+  expect(config.env?.['poc']?.preview_urls).toBeUndefined();
+  expect(config.preview_urls).toBeUndefined();
 });
 
 test('there is no production environment (no Worker is bound to production in Milestone 1)', () => {
