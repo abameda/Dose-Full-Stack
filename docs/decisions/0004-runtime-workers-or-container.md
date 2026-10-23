@@ -1,7 +1,8 @@
 # 0004 - Runtime: Cloudflare Workers or a Node container
 
-- **Status:** draft — the deciding measurement (checkout latency from the owner's Android in Egypt) is
-  added in Milestone 1 Task 20; the decision below is written then
+- **Status:** proposed — the 1.5x rule is exceeded on mobile data, so by the master plan the core moves to
+  the container; per the Milestone 1 plan (Task 20 step 5) that switch is presented to the owner before
+  Milestone 2, and the owner decides
 - **Date:** 2026-10-23
 - **Builds on:** master plan section A ("Two uncertainties, tested before they become hard to undo"),
   0009 (free tiers), 0010 (environments)
@@ -63,15 +64,66 @@ Ratio `worker_p95 / container_p95` = **2.05** (above 1.5). The container's first
 stop took 6.6 s (cold start), which the warm-up absorbed. The Worker path includes Cloudflare
 Access's check at the edge on every request, which production checkout will not have.
 
-### Latency: from the owner's Android in Egypt (decides)
+### Latency: from a phone in Egypt (decides)
 
-To be added in Task 20 (`docs/runbooks/field-check-m1.md`, step D): mobile data, and Wi-Fi if possible.
+The plan named the owner's mid-range Android; none was available, so the owner chose the iPhone, which
+the master plan's rule permits ("measured from a phone in Egypt"). Owner's iPhone (iPhone17,3, iOS 26.5)
+inside Instagram's in-app browser, 2026-10-23, 50 checkouts per target, interleaved, one warm-up each,
+0 failures in either run (`docs/evidence/m1/latency-iphone-2026-10-23.json`, every sample included):
+
+| Run | Worker p50 / p95 / p99 | Container p50 / p95 / p99 | p95 ratio | 1.5x rule |
+| --- | --- | --- | --- | --- |
+| **Mobile data** (14:55 UTC) — deciding | 267 / **379** / 581 ms | 147 / **190** / 208 ms | **1.99** | **exceeded** |
+| Wi-Fi (14:56 UTC) | 321 / 682 / 1,227 ms | 165 / 500 / 611 ms | 1.36 | not exceeded |
+
+In the Wi-Fi run both targets slowed together from sample 38 on (container about 150 to 450 ms), a
+network change during the run, so it is the noisier of the two. The mobile-data run decides.
+
+### Limits of this comparison (owner instruction, 2026-10-23)
+
+The two targets were not measured on equal terms, and every difference favours the container:
+
+1. **Workers Free.** The Worker ran on the Free plan, whose 10 ms CPU limit its checkout exceeds
+   (p50 about 30 ms). Free invocations that run over can be stopped; none of the 100 latency checkouts
+   failed, but the concurrency proof did (see above). The master plan's runtime is Workers **paid**.
+2. **Cloudflare Access on every Worker request.** Each Worker checkout passed Access at the edge (the
+   `CF_Authorization` cookie checked) and had its Access JWT verified in the Worker (RS256). The
+   container checked a bearer token by string comparison. Production checkout is public and will have
+   neither.
+3. **A new database connection per Worker request.** The Worker opens a `pg` connection through
+   Hyperdrive for every request (`createRequestDb`), including its authentication handshake; the
+   container keeps a warm pool of 20. This is inherent to Workers: an I/O object such as a socket
+   cannot outlive the request that opened it, and Hyperdrive's pooling (Worker to Hyperdrive locally,
+   Hyperdrive to Neon over warm connections) is Cloudflare's answer to it. It is a likely part of the
+   gap and would remain on the paid plan (not measured separately).
+4. **Placement hop.** The phone's requests reached Cloudflare in Marseille (`MRS`) and ran in
+   Frankfurt (`remote-FRA`), one extra hop; the container's requests went to Fly.io's edge and then
+   its Frankfurt machine.
+5. **One phone, one network, one time.** 50 checkouts per target on one iPhone and one mobile network;
+   the Android named in the plan is pending (owner, 2026-10-23).
+
+How much of the 189 ms p95 gap (379 vs 190 ms) each of 1-3 explains was not measured.
 
 ## Decision
 
-To be written in Task 20, applying the 1.5× rule to the phone measurement, with the concurrency
-result above. If it says the core moves to the container, it is brought to the owner before
-Milestone 2 starts.
+**The master plan's rule, applied as written, says the core moves to the container:** on Egyptian
+mobile data the Worker's checkout p95 was 1.99 times the container's (limit 1.5), and the Worker has
+not passed the concurrency proof on the Free plan while the container passed all 100 runs.
+
+Because the comparison was not like for like (the limits above), and because the plan requires a
+switch to be brought to the owner before Milestone 2, this record does not act on it. The owner
+chooses one of:
+
+- **A. Move the core to the container** (the rule as written). The Fly.io container becomes the
+  commerce runtime from Milestone 2; the storefront can stay on Workers. Cost: an always-on machine
+  (about $4-8 a month), and the per-change preview model must be rebuilt for the container.
+- **B. Measure again on equal terms, then decide.** Workers paid for the measurement (about $5 for a
+  month), an Access bypass for `/api/checkout` on the poc Worker only (so neither target pays for
+  login); then repeat the concurrency proof (100 runs) and the phone measurement.
+- **C. Keep Workers despite the rule.** A deliberate amendment of the master plan's rule, recorded as
+  its own decision with the reason.
+
+The owner's choice and its date are added here; until then the status stays "proposed".
 
 ## Consequences (known already)
 

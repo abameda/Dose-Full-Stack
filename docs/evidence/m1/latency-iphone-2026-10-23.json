@@ -1,0 +1,49 @@
+{
+  "note": "Deciding latency measurement (Task 20 step D; master plan A: 'measured from a phone in Egypt'). Owner's iPhone (iPhone17,3, iOS 26.5) inside Instagram 452.0.1.39.54's in-app browser, /poc/latency on the poc Worker (Workers Free, behind Cloudflare Access) versus the Fly.io container (bearer token, no Access), both against Neon branch poc in Frankfurt. Run 1 on Egyptian mobile data, run 2 on Wi-Fi (owner confirmed 2026-10-23). iOS exposes no navigator.connection, hence connection null. Copied from 'Copy results'; samples are listed per target in interleaved order (W1, C1, W2, C2, ...), in ms, every one status 201.",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/23F77 Instagram 452.0.1.39.54 (iPhone17,3; iOS 26_5; en_US; en; scale=3.00; 1179x2556; IABMV/1; 1093431980) Safari/604.1",
+  "percentileMethod": "nearest rank",
+  "ratioLimit": 1.5,
+  "runs": [
+    {
+      "network": "mobile data (Egypt)",
+      "measuredAt": "2026-10-23T14:55:14.394Z",
+      "checkoutsPerTarget": 50,
+      "quotedTotal": 17000,
+      "connection": null,
+      "worker": { "n": 50, "p50": 266.9999999999991, "p95": 379, "p99": 581, "min": 200, "max": 581, "failed": 0 },
+      "container": { "n": 50, "p50": 147, "p95": 190, "p99": 208, "min": 123, "max": 208, "failed": 0 },
+      "ratio": 1.99,
+      "exceeds": true,
+      "warmup": [
+        { "target": "worker", "ms": 331, "status": 201, "ok": true },
+        { "target": "container", "ms": 882.0000000000005, "status": 201, "ok": true }
+      ],
+      "failures": [],
+      "samplesMs": {
+        "worker": [379, 337, 288, 267, 288, 349, 275, 272, 242, 338, 330, 254, 269, 229, 250, 238, 255, 267, 342, 251, 255, 294, 208, 268, 356, 257, 302, 250, 382, 254, 581, 339, 338, 219, 263, 252, 290, 226, 200, 237, 274, 340, 251, 253, 250, 263, 348, 247, 252, 310],
+        "container": [156, 162, 175, 138, 188, 134, 129, 137, 142, 149, 144, 142, 129, 178, 146, 161, 143, 124, 147, 160, 137, 190, 178, 130, 208, 136, 182, 144, 179, 144, 134, 145, 150, 180, 132, 151, 191, 180, 184, 164, 124, 149, 147, 149, 146, 123, 145, 145, 151, 171]
+      }
+    },
+    {
+      "network": "Wi-Fi",
+      "measuredAt": "2026-10-23T14:56:07.352Z",
+      "checkoutsPerTarget": 50,
+      "quotedTotal": 17000,
+      "connection": null,
+      "worker": { "n": 50, "p50": 321, "p95": 682.0000000000146, "p99": 1227.0000000000073, "min": 195.99999999999272, "max": 1227.0000000000073, "failed": 0 },
+      "container": { "n": 50, "p50": 165, "p95": 500, "p99": 610.9999999999854, "min": 97.00000000000728, "max": 610.9999999999854, "failed": 0 },
+      "ratio": 1.36,
+      "exceeds": false,
+      "warmup": [
+        { "target": "worker", "ms": 284, "status": 201, "ok": true },
+        { "target": "container", "ms": 481, "status": 201, "ok": true }
+      ],
+      "failures": [],
+      "observation": "From sample 38 on, both targets slowed together (container ~150 ms -> ~450 ms, worker ~300 ms -> ~650 ms): a network change during the run, not either server.",
+      "samplesMs": {
+        "worker": [336, 329, 467, 303, 225, 323, 290, 289, 391, 334, 267, 271, 301, 276, 252, 301, 196, 307, 404, 277, 323, 347, 257, 374, 266, 272, 331, 241, 367, 224, 266, 243, 344, 244, 272, 321, 304, 284, 1227, 553, 619, 607, 548, 454, 682, 675, 663, 694, 637, 629],
+        "container": [205, 223, 212, 155, 109, 160, 155, 150, 178, 190, 157, 149, 147, 109, 157, 121, 130, 153, 149, 156, 178, 204, 187, 151, 155, 159, 169, 97, 139, 157, 156, 151, 203, 157, 165, 175, 169, 368, 451, 387, 296, 336, 500, 405, 611, 456, 466, 574, 442, 454]
+      }
+    }
+  ]
+}
