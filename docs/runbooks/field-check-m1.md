@@ -13,15 +13,19 @@ yours or obviously fake (for example `0100 000 0001`), and a made-up address. No
 
 | # | Link | What it is |
 | --- | --- | --- |
-| L1 | `{STAGING}/ar` | Storefront, Arabic |
-| L2 | `{STAGING}/en` | Storefront, English |
-| L3 | `{STAGING}/admin` | Admin (Today, orders, audit log) |
-| L4 | `{STAGING}/en/products/paradise` | Direction 0 product page (Paradise) |
-| L5 | `{STAGING}/studio/en/products/paradise` | Studio: Direction X1 product page |
-| L6 | `{POC}/poc/latency` | Latency test, Worker versus container |
+| L1 | `https://dose-web-staging.dose-platform.workers.dev/ar` | Storefront, Arabic |
+| L2 | `https://dose-web-staging.dose-platform.workers.dev/en` | Storefront, English |
+| L3 | `https://dose-web-staging.dose-platform.workers.dev/admin` | Admin (Today, orders, audit log) |
+| L4 | `https://dose-web-staging.dose-platform.workers.dev/en/products/paradise` | Direction 0 product page (Paradise) |
+| L5 | `https://dose-web-staging.dose-platform.workers.dev/studio/en/products/paradise` | Studio: Direction X1 product page |
+| L6 | `https://dose-web-poc.dose-platform.workers.dev/poc/latency` | Latency test, Worker versus container |
 
-`{STAGING}` is `https://dose-web-staging.{SUBDOMAIN}.workers.dev` and `{POC}` is
-`https://dose-web-poc.{SUBDOMAIN}.workers.dev`; the exact links are sent with this checklist.
+Staging and the PoC Worker sit behind Cloudflare Access: sign in once per Worker with your email and
+the one-time code (the session lasts 24 hours).
+
+**Workers Free note (decision 0004).** A page or a checkout on the Free plan can occasionally fail
+with a Cloudflare error page or a blank answer when it uses more than 10 ms of CPU. If that happens,
+note which step and the time, screenshot it, and reload; it is part of the evidence, not your mistake.
 
 ## Step A: sign in through Access inside Instagram (belief B8) — both phones
 
