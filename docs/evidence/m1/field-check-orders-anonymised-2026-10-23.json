@@ -1,0 +1,160 @@
+{
+  "note": "Field-check orders on staging (2026-10-23), exported before the staging reset of 2026-10-29. Anonymised: customer names, phones, addresses and ids are removed; staff actors are reduced to their role.",
+  "exportedAt": "2026-10-29T16:19:13.806Z",
+  "orders": [
+    {
+      "number": "D10001",
+      "lang": "en",
+      "direction": "d0-baseline",
+      "channel": "web",
+      "payment_method": "cod",
+      "subtotal": 150000,
+      "discount_total": 0,
+      "delivery_fee": 7000,
+      "total": 157000,
+      "order_state": "confirmed",
+      "payment_state": "awaiting_collection",
+      "fulfilment_state": "unfulfilled",
+      "version": 2,
+      "created_at": "2026-10-23T13:36:14.325Z"
+    },
+    {
+      "number": "D10002",
+      "lang": "ar",
+      "direction": "d0-baseline",
+      "channel": "web",
+      "payment_method": "cod",
+      "subtotal": 300000,
+      "discount_total": 0,
+      "delivery_fee": 7000,
+      "total": 307000,
+      "order_state": "cancelled",
+      "payment_state": "voided",
+      "fulfilment_state": "unfulfilled",
+      "version": 2,
+      "created_at": "2026-10-23T14:02:50.353Z"
+    },
+    {
+      "number": "D10003",
+      "lang": "en",
+      "direction": "d0-baseline",
+      "channel": "web",
+      "payment_method": "cod",
+      "subtotal": 1050000,
+      "discount_total": 0,
+      "delivery_fee": 7000,
+      "total": 1057000,
+      "order_state": "confirmed",
+      "payment_state": "awaiting_collection",
+      "fulfilment_state": "unfulfilled",
+      "version": 2,
+      "created_at": "2026-10-23T14:10:56.286Z"
+    }
+  ],
+  "lines": [
+    {
+      "number": "D10001",
+      "sku": "PARADISE-50ML",
+      "quantity": 1,
+      "unit_price": 150000
+    },
+    {
+      "number": "D10002",
+      "sku": "BLANC-50ML",
+      "quantity": 1,
+      "unit_price": 150000
+    },
+    {
+      "number": "D10002",
+      "sku": "PARADISE-50ML",
+      "quantity": 1,
+      "unit_price": 150000
+    },
+    {
+      "number": "D10003",
+      "sku": "BLANC-50ML",
+      "quantity": 4,
+      "unit_price": 150000
+    },
+    {
+      "number": "D10003",
+      "sku": "PARADISE-50ML",
+      "quantity": 3,
+      "unit_price": 150000
+    }
+  ],
+  "audit": [
+    {
+      "at": "2026-10-23T13:36:14.347Z",
+      "actor_type": "customer",
+      "actor": "customer",
+      "action": "order.placed",
+      "entity": "order",
+      "entity_id": "D10001",
+      "entity_version": 1,
+      "reason": null,
+      "has_method": false,
+      "method": null
+    },
+    {
+      "at": "2026-10-23T13:36:48.722Z",
+      "actor_type": "staff",
+      "actor": "staff",
+      "action": "order.confirmed",
+      "entity": "order",
+      "entity_id": "D10001",
+      "entity_version": 2,
+      "reason": null,
+      "has_method": true,
+      "method": "whatsapp"
+    },
+    {
+      "at": "2026-10-23T14:02:50.372Z",
+      "actor_type": "customer",
+      "actor": "customer",
+      "action": "order.placed",
+      "entity": "order",
+      "entity_id": "D10002",
+      "entity_version": 1,
+      "reason": null,
+      "has_method": false,
+      "method": null
+    },
+    {
+      "at": "2026-10-23T14:10:56.311Z",
+      "actor_type": "customer",
+      "actor": "customer",
+      "action": "order.placed",
+      "entity": "order",
+      "entity_id": "D10003",
+      "entity_version": 1,
+      "reason": null,
+      "has_method": false,
+      "method": null
+    },
+    {
+      "at": "2026-10-23T14:11:52.150Z",
+      "actor_type": "staff",
+      "actor": "staff",
+      "action": "order.confirmed",
+      "entity": "order",
+      "entity_id": "D10003",
+      "entity_version": 2,
+      "reason": null,
+      "has_method": true,
+      "method": "whatsapp"
+    },
+    {
+      "at": "2026-10-25T14:05:43.308Z",
+      "actor_type": "system",
+      "actor": "system",
+      "action": "order.cancelled",
+      "entity": "order",
+      "entity_id": "D10002",
+      "entity_version": 2,
+      "reason": "confirmation_window_expired",
+      "has_method": false,
+      "method": null
+    }
+  ]
+}
